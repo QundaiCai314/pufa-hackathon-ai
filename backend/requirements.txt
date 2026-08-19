@@ -1,0 +1,56 @@
+# ============================================================
+# 氢璞 AI 后端依赖
+# ============================================================
+
+# Web 框架
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+python-dotenv==1.0.1
+
+# AI 框架
+langchain==0.1.10
+langchain-openai==0.0.8
+langchain-community==0.0.25
+openai==1.12.0
+
+# PDF 处理（基础库，MinerU 额外依赖在 Dockerfile 中安装）
+PyMuPDF==1.24.14
+pdfplumber==0.11.0
+Pillow==10.2.0
+
+# 数据库
+sqlalchemy==2.0.27
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# 向量数据库
+qdrant-client==1.7.3
+
+# 缓存
+redis==5.0.1
+
+# 工具库
+pandas==2.2.0
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# HTTP 请求
+httpx==0.26.0
+aiohttp==3.9.3
+
+# 认证
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ============================================================
+# MinerU 相关依赖（通过 Dockerfile 单独安装以控制版本）
+# 以下包在 Dockerfile 中通过专用步骤安装，此处仅作记录：
+#   magic-pdf==1.3.12
+#   transformers==4.49.0
+#   timm==1.0.28
+#   detectron2==0.6（源码编译）
+#   pycocotools
+#   modelscope（magic-pdf 依赖）
+#   huggingface_hub（magic-pdf 依赖）
+# ============================================================

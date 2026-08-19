@@ -1,0 +1,17 @@
+.App {
+  text-align: center;
+}
+
+.ant-layout-header {
+  display: flex;
+  align-items: center;
+}
+
+.ant-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s ease;
+}
