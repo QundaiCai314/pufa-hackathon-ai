@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 # 路由
 from app.api.documents import router as documents_router
 from app.api.rag import router as rag_router
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
+from app.api.auth import ensure_chat_tables
 
 # 配置日志
 logging.basicConfig(
@@ -41,11 +44,16 @@ app.add_middleware(
 # ============================================================
 app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(rag_router, prefix="/api/v1", tags=["rag"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
 
-# TODO: 待注册路由
-# - /api/v1/chat - 聊天接口
-# - /api/v1/content - 内容管理
-# - /api/v1/admin - 管理后台
+@app.on_event("startup")
+def migrate_chat_tables():
+    try:
+        ensure_chat_tables()
+        logger.info("Chat memory schema ready")
+    except Exception as exc:
+        logger.error("Chat memory migration failed: %s", exc)
 
 
 # ============================================================

@@ -15,3 +15,102 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.3s ease;
 }
+
+/* Markdown 样式 */
+.markdown-body {
+  font-size: 14px;
+  line-height: 1.8;
+  word-wrap: break-word;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.markdown-body h1 { font-size: 1.4em; }
+.markdown-body h2 { font-size: 1.25em; }
+.markdown-body h3 { font-size: 1.1em; }
+
+.markdown-body p {
+  margin-bottom: 8px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 24px;
+  margin-bottom: 8px;
+}
+
+.markdown-body li {
+  margin-bottom: 4px;
+}
+
+.markdown-body code {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  background: #f6f8fa;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #ddd;
+  padding-left: 12px;
+  color: #666;
+  margin: 8px 0;
+}
+
+.answer-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 10px 0 14px;
+}
+
+.answer-table-wrap table,
+.markdown-body table {
+  display: table;
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  background: #fff;
+  font-size: 13px;
+}
+
+.answer-table-wrap th,
+.answer-table-wrap td,
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #d9d9d9;
+  padding: 7px 10px;
+  text-align: left;
+  white-space: nowrap;
+  color: #222;
+}
+
+.answer-table-wrap th,
+.markdown-body th {
+  background: #f2f2f2;
+  font-weight: 600;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 12px 0;
+}

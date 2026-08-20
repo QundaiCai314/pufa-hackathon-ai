@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Upload, message, Modal, Tag, Typography,
   Empty, Descriptions, List, Space, Progress, Badge, Image as AntImage,
-  Tooltip, Select, Spin, Alert, Tabs,
+  Spin, Alert, Tabs,
 } from 'antd';
 import {
   UploadOutlined, FilePdfOutlined, EyeOutlined, ReloadOutlined,
@@ -14,31 +14,11 @@ import { documentApi, type DocumentInfo, type ClassifiedContent } from '../servi
 
 const { Title, Text, Paragraph } = Typography;
 
-const PAGE_TYPE_LABELS: Record<string, string> = {
-  cover: '封面',
-  product_spec: '产品参数',
-  company_intro: '企业介绍',
-  solution: '解决方案',
-  other: '其他',
-};
 
-const IMG_TYPE_COLORS: Record<string, string> = {
-  product_image: 'blue',
-  chart: 'purple',
-  flowchart: 'cyan',
-  map: 'green',
-  logo: 'orange',
-  qr_code: 'orange',
-  other: 'default',
-};
 
-const IMG_TYPE_ICONS: Record<string, string> = {
-  product_image: '🚛',
-  chart: '📊',
-  flowchart: '🔄',
-  map: '🗺️',
-  other: '🖼️',
-};
+
+
+
 
 const DocumentsPage: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
@@ -272,8 +252,6 @@ const DocumentsPage: React.FC = () => {
     if (!classified || !classified.product_images || classified.product_images.length === 0) return <Empty description="无产品图片" />;
     
     // 按 product_group 的介绍页配对图片
-    const introPages = (classified.product_groups || []).map(g => g.category_page);
-    
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={24}>
         <Alert message={`共 ${classified.product_images.length} 张产品图片，点击可放大`} type="info" showIcon />

@@ -97,18 +97,22 @@ class RAGService:
                         "type": crop.get("type", "other"),
                         "text": desc,
                         "category": crop.get("category", ""),
-                        "case": crop.get("case", ""),
-                        "source": f"/api/v1/documents/crop_image/{doc_name}/pn/v{block_idx}",
+                        "case_name": crop.get("case", ""),
+                        "source": f"/api/v1/documents/extracted_image/{doc_name}/{pn}/{block_idx}",
                     }
                 ))
 
-            # 3. 索引表格（Key-Value 展开）
-            for table in page.get("tables", []):
-                text = self._table_to_text(table)
-                if len(text) < 20:
+            # 3. 将产品规格字典索引为标准二列表，避免参数只存在于正文时无法结构化展示。
+            for product in page.get("products", []):
+                specs = product.get("specs", {}) or {}
+                if not specs:
                     continue
-                vec = await embedding_service.embed_text(text)
-                point_id = self._make_id(text, doc_name, pn, 999)
+                model = str(product.get("model", "产品规格"))
+                headers = ["参数", model]
+                rows = [[str(key), str(value)] for key, value in specs.items()]
+                table_text = self._table_to_text({"headers": headers, "rows": rows})
+                vec = await embedding_service.embed_text(f"{product.get('category', '')} {table_text}")
+                point_id = self._make_id(table_text, doc_name, pn, 998)
                 points.append(PointStruct(
                     id=point_id,
                     vector=vec,
@@ -116,7 +120,70 @@ class RAGService:
                         "doc": doc_name,
                         "page": pn,
                         "type": "table",
-                        "text": text,
+                        "text": table_text,
+                        "table_headers": headers,
+                        "table_rows": rows,
+                        "table_title": product.get("category", "产品规格"),
+                    }
+                ))
+
+            # 4. 索引文档中原有表格（修正表头 + OCR 混淆）
+            for table in page.get("tables", []):
+                headers = list(table.get("headers", []))
+                rows = [list(r) for r in table.get("rows", [])]
+                if not headers or not rows:
+                    continue
+                
+                # 修正：如果第一列是"参数"且其他列是型号，转置表格
+                # 原始：[参数, CESP250, CESP500, ...] → 转置为：[型号, 参数1, 参数2, ...]
+                if headers[0] == "参数" and len(headers) > 2:
+                    # 检查其他列是否是型号（包含字母和数字）
+                    other_headers = headers[1:]
+                    is_model = all(any(c.isalpha() for c in h) and any(c.isdigit() for c in h) for h in other_headers if h)
+                    if is_model:
+                        # 转置：型号为行，参数为列
+                        new_headers = ["型号"] + [str(r[0]) for r in rows]
+                        new_rows = []
+                        for col_idx in range(1, len(headers)):
+                            new_row = [headers[col_idx]] + [str(r[col_idx]) if col_idx < len(r) else "" for r in rows]
+                            new_rows.append(new_row)
+                        headers = new_headers
+                        rows = new_rows
+                
+                # 修复 OCR 混淆："产氧量"→"产氢量"
+                fixed_rows = []
+                seen_names = {}
+                for row in rows:
+                    if not row:
+                        fixed_rows.append(row)
+                        continue
+                    name = str(row[0])
+                    if name in seen_names:
+                        seen_names[name] += 1
+                        new_row = list(row)
+                        if "氢" in name:
+                            new_row[0] = name.replace("氢", "氧")
+                        fixed_rows.append(new_row)
+                    else:
+                        seen_names[name] = 1
+                        fixed_rows.append(row)
+                
+                table_text = self._table_to_text({"headers": headers, "rows": fixed_rows})
+                if len(table_text) < 20:
+                    continue
+                vec = await embedding_service.embed_text(table_text)
+                point_id = self._make_id(table_text, doc_name, pn, 999)
+                points.append(PointStruct(
+                    id=point_id,
+                    vector=vec,
+                    payload={
+                        "doc": doc_name,
+                        "page": pn,
+                        "type": "table",
+                        "text": table_text,
+                        "table_headers": headers,
+                        "table_rows": fixed_rows,
+                        "table_title": table.get("title", ""),
                     }
                 ))
 
@@ -188,6 +255,9 @@ class RAGService:
                 "category": r.payload.get("category", ""),
                 "case": r.payload.get("case", ""),
                 "source": r.payload.get("source", ""),
+                "table_headers": r.payload.get("table_headers", []),
+                "table_rows": r.payload.get("table_rows", []),
+                "table_title": r.payload.get("table_title", ""),
             })
 
         hits.sort(key=lambda x: x["score"], reverse=True)

@@ -2,14 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { ConfigProvider, Layout, Typography, Spin, Alert, Menu } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import {
-  HomeOutlined, FileTextOutlined, MessageOutlined,
+  HomeOutlined, FileTextOutlined, MessageOutlined, LogoutOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import DocumentsPage from './pages/Documents';
 import ChatPage from './pages/Chat';
+import AdminPage from './pages/Admin';
+import Login from './pages/Login';
 import './App.css';
 
-const { Header, Content, Footer, Sider } = Layout;
+const { Header, Content, Footer } = Layout;
 const { Title, Paragraph } = Typography;
 
 interface SystemInfo {
@@ -90,7 +92,12 @@ const HomePage: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const [auth, setAuth] = useState<any>(() => { try { return JSON.parse(localStorage.getItem('qingpu_auth') || 'null'); } catch { return null; } });
   const [currentPage, setCurrentPage] = useState('home');
+
+  if (!auth?.token) return <Login onLogin={setAuth} />;
+
+  const logout = () => { localStorage.removeItem('qingpu_auth'); setAuth(null); };
 
   return (
     <ConfigProvider locale={zhCN}>
@@ -103,11 +110,14 @@ const App: React.FC = () => {
             theme="dark"
             mode="horizontal"
             selectedKeys={[currentPage]}
-            onClick={({ key }) => setCurrentPage(key)}
+            onClick={({ key }) => key === 'logout' ? logout() : setCurrentPage(key)}
             items={[
               { key: 'home', icon: <HomeOutlined />, label: '首页' },
               { key: 'documents', icon: <FileTextOutlined />, label: '文档管理' },
               { key: 'chat', icon: <MessageOutlined />, label: '智能问答' },
+              ...(auth.user?.is_admin ? [{ key: 'admin', label: '管理后台' }] : []),
+              { type: 'divider' as const },
+              { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
             ]}
             style={{ flex: 1, minWidth: 0 }}
           />
@@ -116,7 +126,8 @@ const App: React.FC = () => {
         <Content style={{ padding: '24px 24px' }}>
           {currentPage === 'home' && <HomePage />}
           {currentPage === 'documents' && <DocumentsPage />}
-          {currentPage === 'chat' && <ChatPage />}
+          {currentPage === 'chat' && <ChatPage token={auth.token} />}
+          {currentPage === 'admin' && auth.user?.is_admin && <AdminPage token={auth.token} />}
         </Content>
 
         <Footer style={{ textAlign: 'center' }}>

@@ -1,78 +1,27 @@
-# 氢璞 AI 智能助手 - 项目状态报告
+# 项目状态
 
-**生成时间：** 2026-08-20 00:37 (CST)
+**更新时间：** 2026-08-21
 
----
+## 当前能力
 
-## ✅ 已完成功能
+- 企业 PDF 知识库：上传、解析、视觉分析、向量检索与来源展示。
+- AI 对话：客服、销售、技术支持三种角色；会话持久化、上下文摘要与无结果降级。
+- 联网搜索：Tavily 结构化搜索，失败时回退企业知识库。
+- 销售能力：对话内主动产品推荐、客户意向度评分与线索分级。
+- 账号体系：客户与管理用户注册；管理注册须使用环境变量 `ADMIN_REGISTRATION_CODE`。
+- 管理后台：统计看板、用户列表、线索列表、对话查看、知识库管理和销售方案 DOCX 下载。
 
-### 文档解析与知识提取
-- ✅ PDF 上传与逐页渲染（PyMuPDF）
-- ✅ GPT-5.6 Luna 多模态视觉分析（替代 OCR）
-- ✅ 产品参数结构化提取（产品大类 → 具体型号）
-- ✅ 产品特点提取（list_item 合并到产品大类）
-- ✅ 英文产品名提取与展示
-- ✅ 表格结构化提取（行列数据）
-- ✅ 产品图片提取与 GPT 上下文增强描述
-- ✅ 背景图/页脚logo/二维码过滤
-- ✅ 联系方式提取
+## 运行检查
 
-### 前端展示
-- ✅ 文档管理页面（上传/解析/分析/查看）
-- ✅ 概览 Tab（产品大类/型号/表格/图片统计 + 联系方式）
-- ✅ 产品参数 Tab（大类卡片 + 特点标签 + 型号参数表）
-- ✅ 表格 Tab
-- ✅ 产品图片 Tab（按大类分组展示，含 GPT 描述）
-- ✅ Ant Design 中文本地化
+| 服务 | 地址 | 状态 |
+|---|---|---|
+| 前端 | http://localhost:3000 | 已验证 |
+| 后端 | http://localhost:8000 | 已验证 |
+| API 文档 | http://localhost:8000/docs | 可用 |
+| Qdrant | http://localhost:6333/dashboard | 可用 |
 
-### 后端 API
-- ✅ `POST /upload` - PDF 上传
-- ✅ `POST /parse` - MinerU 解析
-- ✅ `GET /list` - 文档列表
-- ✅ `POST /analyze/{filename}` - GPT 视觉分析
-- ✅ `GET /classified/{filename}` - 分类内容
-- ✅ `GET /render/{filename}/{page}` - 页面渲染图
-- ✅ `GET /extracted_image/{filename}/{page}/{index}` - 提取图片
-- ✅ `POST /enrich_images/{filename}` - 图片描述增强
-- ✅ `GET /analysis_status/{filename}` - 分析状态
+## 安全与部署
 
-### DevOps
-- ✅ Docker Compose 多服务编排
-- ✅ 数据持久化（Docker Volumes）
-- ✅ 一键启动/停止脚本（Windows）
-- ✅ 环境变量配置
-- ✅ 镜像源加速配置
-
----
-
-## 🚧 待开发功能
-
-### RAG 系统
-- [ ] 文本向量化（OpenAI Embeddings）
-- [ ] Qdrant 向量存储
-- [ ] 向量检索与相似度搜索
-- [ ] 混合检索（向量 + 关键词）
-
-### 对话系统
-- [ ] 多轮对话管理
-- [ ] 会话历史存储
-- [ ] RAG 检索增强生成
-
-### 可视化展示
-- [ ] 表格数据可视化
-- [ ] 知识图谱可视化
-
----
-
-## 🔗 访问地址
-
-| 服务 | URL | 状态 |
-|------|-----|------|
-| 前端应用 | http://localhost:3000 | ✅ |
-| 后端 API | http://localhost:8000 | ✅ |
-| API 文档 | http://localhost:8000/docs | ✅ |
-| Qdrant | http://localhost:6333/dashboard | ✅ |
-
----
-
-**报告结束**
+- `.env` 含密钥且被 Git 忽略；禁止提交真实 API Key。
+- 生产环境必须更换 `ADMIN_REGISTRATION_CODE`、JWT 密钥和已暴露过的 API Key。
+- 后端依赖已包含 `python-docx`，用于销售方案文档生成。
