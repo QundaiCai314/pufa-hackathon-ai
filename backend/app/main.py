@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 # 路由
 from app.api.documents import router as documents_router
+from app.api.rag import router as rag_router
 
 # 配置日志
 logging.basicConfig(
@@ -39,6 +40,7 @@ app.add_middleware(
 # 注册路由
 # ============================================================
 app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
+app.include_router(rag_router, prefix="/api/v1", tags=["rag"])
 
 # TODO: 待注册路由
 # - /api/v1/chat - 聊天接口

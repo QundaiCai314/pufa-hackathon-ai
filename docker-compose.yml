@@ -59,6 +59,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_API_BASE=${OPENAI_API_BASE}
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_API_BASE=${EMBEDDING_API_BASE}
       - ENV=development
       - MINERU_OUTPUT_DIR=/app/data/mineru_output
       - UPLOAD_DIR=/app/data/raw

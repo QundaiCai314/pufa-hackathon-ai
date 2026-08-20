@@ -145,4 +145,30 @@ export const documentApi = {
   imageUrl: (filename: string, imgPath: string) => {
     return `${API_BASE}/api/v1/documents/image/${encodeURIComponent(filename)}?path=${encodeURIComponent(imgPath)}`;
   },
+
+  // === RAG 语义搜索 ===
+  ragSearch: async (query: string, topK: number = 5, doc?: string) => {
+    const resp = await api.post('/api/v1/rag/search', {
+      query,
+      top_k: topK,
+      doc,
+    });
+    return resp.data;
+  },
+
+  // === 索引管理 ===
+  ragIndex: async (filename: string) => {
+    const resp = await api.post(`/api/v1/rag/index/${encodeURIComponent(filename)}`);
+    return resp.data;
+  },
+
+  ragStats: async () => {
+    const resp = await api.get('/api/v1/rag/stats');
+    return resp.data;
+  },
+
+  ragDeleteIndex: async (filename: string) => {
+    const resp = await api.delete(`/api/v1/rag/index/${encodeURIComponent(filename)}`);
+    return resp.data;
+  },
 };
