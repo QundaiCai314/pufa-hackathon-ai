@@ -39,13 +39,50 @@ export interface ProductImage {
   url: string;
 }
 
+// === 宣传册类型 ===
+export interface BrochureImage {
+  type: string;
+  type_label: string;
+  description: string;
+  page: number;
+  index?: number;
+  width?: number;
+  height?: number;
+  has_file?: boolean;
+  url?: string;
+}
+
+export interface BrochureSubsection {
+  type: 'heading' | 'paragraph';
+  content: string;
+}
+
+export interface BrochureSection {
+  page_num: number;
+  title: string;
+  page_type: string;
+  page_type_label: string;
+  subsections: BrochureSubsection[];
+  list_items: string[];
+  captions: string[];
+  images_by_type: Record<string, BrochureImage[]>;
+  all_images: BrochureImage[];
+  image_count: number;
+  raw_text: string;
+}
+
 export interface ClassifiedContent {
-  product_groups: ProductGroup[];
-  documents: Array<{ page: number; page_title: string; page_type: string; raw_text: string }>;
-  tables: Array<{ title: string; headers: string[]; rows: string[][]; page: number }>;
-  product_images: ProductImage[];
-  contact_info: { address?: string; phone?: string; website?: string; email?: string } | null;
-  summary: { total_pages: number; total_tokens: number };
+  doc_type?: string;  // 'brochure' or undefined (product catalog)
+  // product catalog fields
+  product_groups?: ProductGroup[];
+  // brochure fields
+  sections?: BrochureSection[];
+  // shared fields
+  documents?: Array<{ page: number; page_title: string; page_type: string; raw_text: string }>;
+  tables?: Array<{ title: string; headers: string[]; rows: string[][]; page: number }>;
+  product_images?: ProductImage[];
+  contact_info?: { address?: string; phone?: string; website?: string; email?: string } | null;
+  summary?: { total_pages?: number; total_tokens?: number; total_images?: number; image_type_stats?: Record<string, number> };
 }
 
 export const documentApi = {

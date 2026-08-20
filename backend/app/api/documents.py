@@ -432,6 +432,37 @@ async def get_extracted_image(filename: str, page: int, index: int):
     raise HTTPException(404, f"Image not found: page {page} index {index}")
 
 
+@router.get("/crop_image/{doc_name}/{page}/{gpt_index}")
+async def get_crop_image(doc_name: str, page: int, gpt_index: str):
+    """获取从渲染图裁剪的图片区域，优先返回证书/圆形抠图版本"""
+    # 支持 verified_ 前缀（PyMuPDF 精确裁剪）和 crop_ 前缀（GPT bbox 裁剪）
+    base_dir = os.path.join(ANALYSIS_BASE, doc_name, f"page_{page:03d}", "crops")
+    final_dir = os.path.join(ANALYSIS_BASE, doc_name, f"page_{page:03d}", "final_v6")
+    cert_dir = os.path.join(ANALYSIS_BASE, doc_name, f"page_{page:03d}", "certs")
+    
+    if str(gpt_index).startswith("v"):
+        idx = int(gpt_index[1:])
+        crop_path = os.path.join(base_dir, f"verified_{idx:02d}.png")
+        final_path = os.path.join(final_dir, f"final_{idx}.png")
+        cert_path = os.path.join(cert_dir, f"cert_{idx:02d}.png")
+    else:
+        crop_path = os.path.join(base_dir, f"crop_{gpt_index:02d}.png")
+        final_path = None
+        cert_path = None
+    
+    # 优先返回证书版本
+    if cert_path and os.path.exists(cert_path):
+        return FileResponse(cert_path, media_type="image/png", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    
+    # 其次返回圆形抠图版本
+    if final_path and os.path.exists(final_path):
+        return FileResponse(final_path, media_type="image/png", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    
+    if not os.path.exists(crop_path):
+        raise HTTPException(404, f"Crop image not found: {crop_path}")
+    return FileResponse(crop_path, media_type="image/png", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
 @router.post("/enrich_images/{filename}")
 async def enrich_images(filename: str):
     """用 GPT 为已提取的产品图片生成结合产品上下文的描述"""

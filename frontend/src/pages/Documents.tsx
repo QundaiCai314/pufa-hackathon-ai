@@ -22,6 +22,24 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   other: '其他',
 };
 
+const IMG_TYPE_COLORS: Record<string, string> = {
+  product_image: 'blue',
+  chart: 'purple',
+  flowchart: 'cyan',
+  map: 'green',
+  logo: 'orange',
+  qr_code: 'orange',
+  other: 'default',
+};
+
+const IMG_TYPE_ICONS: Record<string, string> = {
+  product_image: '🚛',
+  chart: '📊',
+  flowchart: '🔄',
+  map: '🗺️',
+  other: '🖼️',
+};
+
 const DocumentsPage: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -128,15 +146,16 @@ const DocumentsPage: React.FC = () => {
   // ============ 渲染分类内容 ============
 
   const renderOverview = () => {
-    if (!classified) return <Empty description="无数据" />;
+    if (!classified || !classified.product_groups) return <Empty description="无数据" />;
+    const summary = classified.summary || {};
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={16}>
         <Descriptions bordered column={3} size="small">
           <Descriptions.Item label="产品大类">{classified.product_groups.length}</Descriptions.Item>
           <Descriptions.Item label="具体型号">{classified.product_groups.reduce((s, g) => s + g.spec_products.length, 0)}</Descriptions.Item>
-          <Descriptions.Item label="表格">{classified.tables.length}</Descriptions.Item>
-          <Descriptions.Item label="产品图片">{classified.product_images.length}</Descriptions.Item>
-          <Descriptions.Item label="Token消耗">{classified.summary.total_tokens}</Descriptions.Item>
+          <Descriptions.Item label="表格">{classified.tables?.length || 0}</Descriptions.Item>
+          <Descriptions.Item label="产品图片">{classified.product_images?.length || 0}</Descriptions.Item>
+          <Descriptions.Item label="Token消耗">{summary.total_tokens || 0}</Descriptions.Item>
         </Descriptions>
 
         {classified.contact_info && (
@@ -167,7 +186,7 @@ const DocumentsPage: React.FC = () => {
   };
 
   const renderProducts = () => {
-    if (!classified || classified.product_groups.length === 0) return <Empty description="无产品参数" />;
+    if (!classified || !classified.product_groups || classified.product_groups.length === 0) return <Empty description="无产品参数" />;
     
     // 统计所有型号数
     const totalModels = classified.product_groups.reduce((sum, g) => sum + g.spec_products.length, 0);
@@ -231,7 +250,7 @@ const DocumentsPage: React.FC = () => {
   };
 
   const renderTables = () => {
-    if (!classified || classified.tables.length === 0) return <Empty description="无表格" />;
+    if (!classified || !classified.tables || classified.tables.length === 0) return <Empty description="无表格" />;
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={16}>
         {classified.tables.map((table, idx) => (
@@ -250,17 +269,17 @@ const DocumentsPage: React.FC = () => {
   };
 
   const renderImages = () => {
-    if (!classified || classified.product_images.length === 0) return <Empty description="无产品图片" />;
+    if (!classified || !classified.product_images || classified.product_images.length === 0) return <Empty description="无产品图片" />;
     
     // 按 product_group 的介绍页配对图片
-    const introPages = classified.product_groups.map(g => g.category_page);
+    const introPages = (classified.product_groups || []).map(g => g.category_page);
     
     return (
       <Space direction="vertical" style={{ width: '100%' }} size={24}>
         <Alert message={`共 ${classified.product_images.length} 张产品图片，点击可放大`} type="info" showIcon />
-        {classified.product_groups.map((group) => {
+        {(classified.product_groups || []).map((group) => {
           // 找该大类的图片（介绍页上的图片）
-          const groupImgs = classified.product_images.filter(img => img.page === group.category_page);
+          const groupImgs = (classified.product_images || []).filter(img => img.page === group.category_page);
           if (groupImgs.length === 0) return null;
           
           return (
@@ -278,7 +297,7 @@ const DocumentsPage: React.FC = () => {
                 {groupImgs.map((img) => (
                   <div key={img.index} style={{ width: 300 }}>
                     <AntImage
-                      src={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${encodeURI(img.url)}`}
+                      src={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${encodeURI(img.url)}?t=${Date.now()}`}
                       alt={img.description || `P${img.page}图${img.index}`}
                       style={{ width: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }}
                       placeholder={
@@ -302,13 +321,169 @@ const DocumentsPage: React.FC = () => {
     );
   };
 
+  // ============ 宣传册渲染 ============
+
+  const renderBrochureOverview = () => {
+    if (!classified?.sections) return <Empty description="无数据" />;
+    const summary = classified.summary || {};
+    const imgStats = summary.image_type_stats || {};
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={16}>
+        <Descriptions bordered column={3} size="small">
+          <Descriptions.Item label="总页数">{summary.total_pages}</Descriptions.Item>
+          <Descriptions.Item label="内容板块">{classified.sections.length}</Descriptions.Item>
+          <Descriptions.Item label="表格">{classified.tables?.length || 0}</Descriptions.Item>
+          <Descriptions.Item label="图片总数">{summary.total_images || 0}</Descriptions.Item>
+          <Descriptions.Item label="Token消耗">{summary.total_tokens}</Descriptions.Item>
+        </Descriptions>
+
+        {imgStats && Object.keys(imgStats).length > 0 && (
+          <Card size="small" title="图片类型分布">
+            <Space wrap>
+              {Object.entries(imgStats).map(([type, count]) => (
+                <Tag key={type} color="blue" style={{ fontSize: 13 }}>{type}: {count}</Tag>
+              ))}
+            </Space>
+          </Card>
+        )}
+
+        {classified.contact_info && (
+          <Card size="small" title={<Space><PhoneOutlined /> 联系信息</Space>}>
+            <Descriptions column={1} size="small">
+              {classified.contact_info.address && <Descriptions.Item label="地址">{classified.contact_info.address}</Descriptions.Item>}
+              {classified.contact_info.phone && <Descriptions.Item label="电话">{classified.contact_info.phone}</Descriptions.Item>}
+              {classified.contact_info.website && <Descriptions.Item label="网址">{classified.contact_info.website}</Descriptions.Item>}
+              {classified.contact_info.email && <Descriptions.Item label="邮箱">{classified.contact_info.email}</Descriptions.Item>}
+            </Descriptions>
+          </Card>
+        )}
+
+        <Card size="small" title="内容概览">
+          <List size="small" dataSource={classified.sections} renderItem={(sec) => (
+            <List.Item>
+              <Space>
+                <Tag color={sec.page_type === 'cover' ? 'gold' : sec.page_type === 'solution' ? 'green' : 'blue'}>
+                  {sec.page_type_label}
+                </Tag>
+                <Text strong>{sec.title}</Text>
+                <Text type="secondary">P{sec.page_num}</Text>
+                <Tag>文段 {sec.subsections.length}</Tag>
+                {sec.list_items.length > 0 && <Tag color="cyan">列表 {sec.list_items.length}</Tag>}
+                {sec.image_count > 0 && <Tag color="purple">图片 {sec.image_count}</Tag>}
+              </Space>
+            </List.Item>
+          )} />
+        </Card>
+      </Space>
+    );
+  };
+
+  const renderBrochureSections = () => {
+    if (!classified?.sections) return <Empty description="无数据" />;
+    const imgTypeColors: Record<string, string> = { product_image: 'blue', chart: 'purple', flowchart: 'cyan', map: 'green', other: 'default' };
+    const imgTypeIcons: Record<string, string> = { product_image: '🚛', chart: '📊', flowchart: '🔄', map: '🗺️', other: '🖼️' };
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size={24}>
+        <Alert message={`共 ${classified.sections.length} 个内容板块`} type="info" showIcon />
+        {classified.sections.map((sec) => {
+          const hasContent = sec.subsections.length > 0 || sec.list_items.length > 0;
+          const hasImages = sec.image_count > 0;
+          if (!hasContent && !hasImages) return null;
+          return (
+            <Card key={sec.page_num} size="small"
+              title={
+                <Space>
+                  <Tag color={sec.page_type === 'cover' ? 'gold' : sec.page_type === 'solution' ? 'green' : 'blue'}>{sec.page_type_label}</Tag>
+                  <Text strong style={{ fontSize: 15 }}>{sec.title}</Text>
+                  <Text type="secondary">P{sec.page_num}</Text>
+                </Space>
+              }
+            >
+              {sec.subsections.length > 0 && (
+                <div style={{ marginBottom: sec.list_items.length > 0 || hasImages ? 16 : 0 }}>
+                  {sec.subsections.map((sub: any, i: number) => (
+                    <div key={i} style={{ marginBottom: 6 }}>
+                      {sub.type === 'heading' ? (
+                        <Text strong style={{ fontSize: 14, color: '#1890ff' }}>▸ {sub.content}</Text>
+                      ) : sub.type === 'caption' ? (
+                        <Tag style={{ fontSize: 13, margin: 2 }}>{sub.content}</Tag>
+                      ) : (
+                        <Paragraph style={{ marginBottom: 4, marginLeft: 16, color: '#333' }}>{sub.content}</Paragraph>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {sec.list_items.length > 0 && (
+                <div style={{ marginBottom: hasImages ? 16 : 0, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
+                  <Text strong style={{ color: '#52c41a' }}>◆ 列表内容</Text>
+                  <div style={{ marginTop: 8 }}>
+                    {sec.list_items.map((li, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <Tag color="green" style={{ minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{i + 1}</Tag>
+                        <Text style={{ flex: 1 }}>{li}</Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {hasImages && Object.entries(sec.images_by_type).map(([itype, imgs]) => (
+                <div key={itype} style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Tag color={imgTypeColors[itype] || 'default'} style={{ fontSize: 13 }}>
+                      {imgTypeIcons[itype] || '🖼️'} {imgs[0]?.type_label || itype} ({imgs.length})
+                    </Tag>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {imgs.map((img: any, i: number) => (
+                      <div key={i} style={{ width: img.has_file ? 280 : 300 }}>
+                        {img.has_file && img.url ? (
+                          <AntImage
+                            src={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${encodeURI(img.url)}?t=${Date.now()}`}
+                            alt={img.description || `P${img.page}图${i}`}
+                            style={{ width: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }}
+                            placeholder={<div style={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: 8 }}><Spin size="large" /></div>}
+                          />
+                        ) : (
+                          <div style={{ width: '100%', minHeight: 60, padding: '12px 14px', background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                            <Space align="start">
+                              <Text style={{ fontSize: 20 }}>{imgTypeIcons[itype] || '🖼️'}</Text>
+                              <Text style={{ fontSize: 13, color: '#666' }}>{img.description}</Text>
+                            </Space>
+                          </div>
+                        )}
+                        {img.description && (
+                          <Paragraph style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#666' }}>{img.description}</Paragraph>
+                        )}
+                        {(img as any).ai_description && (
+                          <Paragraph style={{ marginTop: 8, marginBottom: 0, fontSize: 12, color: '#1677ff', background: '#f0f7ff', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #1677ff' }}>
+                            <Text style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>🤖 AI 产品描述</Text>
+                            <Text style={{ fontSize: 12, color: '#333' }}>{(img as any).ai_description}</Text>
+                          </Paragraph>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </Card>
+          );
+        })}
+      </Space>
+    );
+  };
+
   // ============ Tab 配置 ============
-  const tabItems = classified ? [
+  const tabItems = classified ? (classified.doc_type === 'brochure' ? [
+    { key: 'overview', label: <Space><AppstoreOutlined /> 概览</Space>, children: renderBrochureOverview() },
+    { key: 'sections', label: <Space><UnorderedListOutlined /> 内容板块 ({classified.sections?.length || 0})</Space>, children: renderBrochureSections() },
+    { key: 'tables', label: <Space><TableOutlined /> 表格 ({classified.tables?.length || 0})</Space>, children: renderTables() },
+  ] : [
     { key: 'overview', label: <Space><AppstoreOutlined /> 概览</Space>, children: renderOverview() },
-    { key: 'products', label: <Space><ThunderboltOutlined /> 产品参数 ({classified.product_groups.reduce((s, g) => s + g.spec_products.length, 0)})</Space>, children: renderProducts() },
-    { key: 'tables', label: <Space><TableOutlined /> 表格 ({classified.tables.length})</Space>, children: renderTables() },
-    { key: 'images', label: <Space><FilePdfOutlined /> 产品图片 ({classified.product_images.length})</Space>, children: renderImages() },
-  ] : [];
+    { key: 'products', label: <Space><ThunderboltOutlined /> 产品参数 ({classified.product_groups?.reduce((s, g) => s + g.spec_products.length, 0) || 0})</Space>, children: renderProducts() },
+    { key: 'tables', label: <Space><TableOutlined /> 表格 ({classified.tables?.length || 0})</Space>, children: renderTables() },
+    { key: 'images', label: <Space><FilePdfOutlined /> 产品图片 ({classified.product_images?.length || 0})</Space>, children: renderImages() },
+  ]) : [];
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
