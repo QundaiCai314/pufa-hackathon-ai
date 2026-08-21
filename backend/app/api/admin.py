@@ -24,6 +24,38 @@ def overview(user=Depends(admin_user)):
         recent = conn.execute(text("SELECT s.id,s.session_name,s.lead_score,s.lead_level,s.updated_at,u.username FROM chat_sessions s JOIN users u ON u.id=s.user_id ORDER BY s.updated_at DESC LIMIT 20")).mappings().all()
     return {"users": users, "sessions": sessions, "messages": messages, "lead_distribution": [dict(x) for x in levels], "role_distribution": [dict(x) for x in roles], "recent_sessions": [dict(x) for x in recent]}
 
+@router.get("/project-health")
+def project_health(user=Depends(admin_user)):
+    """管理员项目健康度：仅依据会话、已保存方案和可追溯资料计算。"""
+    required = ["应用场景", "目标规模", "压力要求", "部署方式", "能源来源"]
+    with db().connect() as conn:
+        sessions = conn.execute(text("""SELECT s.id,s.session_name,s.lead_score,s.updated_at,u.username,
+            p.payload FROM chat_sessions s JOIN users u ON u.id=s.user_id
+            LEFT JOIN LATERAL (SELECT payload FROM proposal_versions WHERE session_id=s.id ORDER BY version_no DESC LIMIT 1) p ON TRUE
+            ORDER BY s.updated_at DESC LIMIT 20""")).mappings().all()
+    items = []
+    for session in sessions:
+        payload = session["payload"] or {}
+        if isinstance(payload, str):
+            import json; payload = json.loads(payload)
+        profile = payload.get("profile") or {}
+        evidence = payload.get("normalized_rows") or []
+        conflicts = payload.get("conflicts") or []
+        completeness = round(100 * sum(bool(profile.get(k)) for k in required) / len(required))
+        evidence_score = min(100, len(evidence) * 20) if evidence else 25
+        field_score = 100 if profile.get("部署方式") else 35
+        consistency = max(0, 100 - len(conflicts) * 35)
+        match = min(100, max(25, int(session["lead_score"] or 0) + (20 if profile.get("目标规模") else 0) + (15 if evidence else 0)))
+        feasibility = round((completeness + field_score + consistency) / 3)
+        health = round(completeness*.22 + match*.20 + evidence_score*.20 + field_score*.13 + feasibility*.15 + consistency*.10)
+        risks = []
+        if not profile.get("压力要求"): risks.append({"level":"高", "text":"出口/用氢压力未确认"})
+        if not profile.get("部署方式"): risks.append({"level":"中", "text":"现场部署方式未明确"})
+        if conflicts: risks.append({"level":"中", "text":f"{len(conflicts)} 项参数存在资料冲突，待人工核验"})
+        if evidence: risks.append({"level":"低", "text":"产品参数已保留可追溯资料来源"})
+        items.append({"session_id":str(session["id"]),"project":session["session_name"] or "未命名项目","customer":session["username"],"updated_at":session["updated_at"],"health":health,"dimensions":{"需求完整度":completeness,"产品匹配度":match,"参数可核验度":evidence_score,"现场条件明确度":field_score,"部署可行性":feasibility,"资料一致性":consistency},"risks":risks,"has_proposal":bool(payload)})
+    return {"projects": items}
+
 @router.get("/users")
 def users(user=Depends(admin_user)):
     with db().connect() as conn:

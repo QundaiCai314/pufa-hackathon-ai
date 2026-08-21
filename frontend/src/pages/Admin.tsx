@@ -7,6 +7,10 @@ import {
   UserOutlined, MessageOutlined, ThunderboltOutlined, FileTextOutlined,
   DownloadOutlined, EyeOutlined,
 } from '@ant-design/icons';
+import { Radar } from 'react-chartjs-2';
+import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
+
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 const { Title, Text } = Typography;
 
@@ -31,6 +35,17 @@ interface UserItem {
   created_at: string;
 }
 
+interface HealthProject {
+  session_id: string;
+  project: string;
+  customer: string;
+  updated_at: string;
+  health: number;
+  dimensions: Record<string, number>;
+  risks: { level: string; text: string }[];
+  has_proposal: boolean;
+}
+
 interface LeadItem {
   id: number;
   username: string;
@@ -50,6 +65,8 @@ export default function Admin({ auth }: { auth: any }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [healthProjects, setHealthProjects] = useState<HealthProject[]>([]);
+  const [selectedHealth, setSelectedHealth] = useState<HealthProject | null>(null);
   const [loading, setLoading] = useState(false);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [drawer, setDrawer] = useState<{ lead: LeadItem; messages: any[] } | null>(null);
@@ -58,6 +75,7 @@ export default function Admin({ auth }: { auth: any }) {
     if (activeTab === 'overview') loadOverview();
     if (activeTab === 'users') loadUsers();
     if (activeTab === 'leads') loadLeads();
+    if (activeTab === 'health') loadHealth();
   }, [activeTab]);
 
   const loadOverview = async () => {
@@ -85,6 +103,18 @@ export default function Admin({ auth }: { auth: any }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadHealth = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/v1/admin/project-health`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载项目健康度失败');
+      const data = await res.json();
+      setHealthProjects(data.projects || []);
+      setSelectedHealth(data.projects?.[0] || null);
+    } catch (e: any) { message.error(e.message); }
+    finally { setLoading(false); }
   };
 
   const loadLeads = async () => {
@@ -204,6 +234,28 @@ export default function Admin({ auth }: { auth: any }) {
                 </div>
               </div>
             ) : <Empty />,
+          },
+          {
+            key: 'health', label: '项目健康度',
+            children: loading ? <Spin /> : healthProjects.length === 0 ? <Empty description="尚无已保存方案的项目数据" /> : (
+              <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 18 }}>
+                <div style={{ borderRight: '1px solid #ecece4', paddingRight: 14 }}>
+                  <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>仅管理员可见 · 基于已保存方案和资料证据</div>
+                  {healthProjects.map(p => <button key={p.session_id} onClick={() => setSelectedHealth(p)} style={{ width: '100%', textAlign: 'left', border: '1px solid #e8e7df', background: selectedHealth?.session_id === p.session_id ? '#f0eee6' : '#fff', borderRadius: 10, padding: '12px 13px', marginBottom: 8, cursor: 'pointer' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}><b style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.project}</b><span style={{ fontWeight:700 }}>{p.health}</span></div>
+                    <div style={{ color:'#8a8983', fontSize:12, marginTop:5 }}>{p.customer} · {p.has_proposal ? '已保存方案' : '待保存方案'}</div>
+                  </button>)}
+                </div>
+                {selectedHealth && <div>
+                  <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:10 }}><div><div style={{ fontSize:12,color:'#8a8983' }}>项目健康度 · {selectedHealth.customer}</div><Title level={3} style={{ margin:'3px 0' }}>{selectedHealth.project}</Title></div><div style={{ fontSize:44,fontWeight:700,letterSpacing:-2 }}>{selectedHealth.health}<span style={{ fontSize:15,color:'#888' }}>/100</span></div></div>
+                  <div style={{ display:'grid', gridTemplateColumns:'minmax(300px, 1fr) 1fr', gap:22, alignItems:'center' }}>
+                    <div style={{ height:310 }}><Radar data={{ labels:Object.keys(selectedHealth.dimensions), datasets:[{ label:'项目健康度', data:Object.values(selectedHealth.dimensions), backgroundColor:'rgba(20,20,18,.12)', borderColor:'#141412', borderWidth:2, pointBackgroundColor:'#141412' }] }} options={{ responsive:true, maintainAspectRatio:false, scales:{ r:{ min:0,max:100,ticks:{ display:false },grid:{ color:'#e4e3dc' },angleLines:{ color:'#e4e3dc' },pointLabels:{ font:{ size:12 } } } }, plugins:{ legend:{ display:false } } }} /></div>
+                    <div><div style={{ fontWeight:600,marginBottom:10 }}>风险与可核验信号</div>{selectedHealth.risks.map((r,i)=><div key={i} style={{ padding:'10px 0', borderBottom:'1px solid #efeee8', display:'flex',gap:9 }}><Tag color={r.level==='高'?'red':r.level==='中'?'orange':'green'}>{r.level}风险</Tag><span style={{ fontSize:13 }}>{r.text}</span></div>)}<div style={{ fontSize:12,color:'#8a8983',marginTop:16 }}>评分用于项目跟进排序，不替代工程设计、现场踏勘或人工技术审核。</div></div>
+                  </div>
+                  <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:14 }}>{Object.entries(selectedHealth.dimensions).map(([name,value])=><div key={name} style={{ padding:'12px',border:'1px solid #ecece4',borderRadius:9 }}><div style={{fontSize:12,color:'#888'}}>{name}</div><b style={{fontSize:21}}>{value}</b></div>)}</div>
+                </div>}
+              </div>
+            ),
           },
           {
             key: 'users', label: '用户',
