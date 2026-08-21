@@ -218,10 +218,21 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     handleSend(`请审查以下项目需求的技术风险和缺失条件：${profileText}。请按“已满足条件、潜在风险、必须确认的信息、建议下一步”输出。只依据企业资料，不能编造参数或安全结论。`);
   };
 
+  const compareCategory = (model: string) => {
+    if (model.startsWith('CESP')) return 'PEM制氢系统';
+    if (model.startsWith('OCEAN')) return '船用燃料电池系统';
+    if (model.startsWith('E')) return '燃料电池系统';
+    return '燃料电池电堆';
+  };
+
+  const compareCategories = Array.from(new Set(compareModels.map(compareCategory)));
   const handleCompareSubmit = () => {
     if (compareModels.length < 2) {
       message.warning('请至少选择两款产品进行对比');
       return;
+    }
+    if (compareCategories.length > 1) {
+      message.info('已选择不同产品类别，AI 将分开说明参数差异，不会将它们视为同类产品替代。');
     }
     setCompareOpen(false);
     setRole('technical_support');
@@ -783,6 +794,20 @@ ${query}`
             { value: 'OCEAN200', label: 'OCEAN200 · 船用燃料电池系统' },
           ]}
         />
+        {compareModels.length > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {compareCategories.map(category => (
+              <Tag key={category} style={{ margin: 0, fontSize: 11 }} color={category === 'PEM制氢系统' ? 'green' : 'blue'}>
+                {category} · {compareModels.filter(model => compareCategory(model) === category).length} 款
+              </Tag>
+            ))}
+          </div>
+        )}
+        {compareCategories.length > 1 && (
+          <div style={{ marginTop: 10, padding: '8px 10px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 7, color: '#9a3412', fontSize: 11, lineHeight: 1.6 }}>
+            当前包含不同产品类别。AI 会分别列出各类产品的明确参数，并说明哪些指标不能直接横向比较。
+          </div>
+        )}
       </Modal>
 
       {/* 智能选型表单 */}
