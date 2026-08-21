@@ -189,6 +189,17 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     return Array.from(models).slice(0, 6);
   };
 
+  const handleGeneratePlan = () => {
+    if (!Object.keys(profile).length) {
+      message.warning('请先通过智能选型填写项目需求');
+      setSelectionOpen(true);
+      return;
+    }
+    setRole('sales');
+    const profileText = Object.entries(profile).map(([k, v]) => `${k}=${v}`).join('；');
+    handleSend(`请基于以下项目需求生成一份技术方案初稿：${profileText}。请按“项目概述、需求理解、推荐产品、核心参数、系统配置建议、适用条件、风险与待确认事项、下一步计划”输出。只使用企业资料中明确的信息，缺失内容必须标注“待确认”，不得编造价格、交付周期、认证或性能承诺。`);
+  };
+
   const handleRiskCheck = () => {
     if (!Object.keys(profile).length) {
       message.warning('请先通过智能选型填写项目需求');
@@ -382,6 +393,9 @@ ${query}`
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#7c5d15' }}>当前项目需求画像</span>
             <Space size={10}>
+              <Button type="text" size="small" onClick={handleGeneratePlan} style={{ fontSize: 11, color: '#166534', padding: 0 }}>
+                生成方案
+              </Button>
               <Button type="text" size="small" onClick={handleRiskCheck} style={{ fontSize: 11, color: '#8a6511', padding: 0 }}>
                 风险检查
               </Button>
