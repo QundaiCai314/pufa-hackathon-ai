@@ -191,6 +191,14 @@ def proposal_docx(session_id: str, version_id: str, user=Depends(current_user)):
     for x in p.get("normalized_rows", []):
         cells=table.add_row().cells
         for c,val in zip(cells,[x.get("standard"),x.get("raw"),x.get("model"),x.get("value"),f"{x.get('doc')} P{x.get('page')}",x.get("status")]): c.text=str(val or "")
+    conflicts = p.get("conflicts") or []
+    if conflicts:
+        doc.add_heading("参数冲突与待人工确认", 1)
+        doc.add_paragraph("以下字段在引用资料中存在不同原始值，不能作为已确认技术承诺；请按所列资料页码复核。")
+        for conflict in conflicts:
+            doc.add_paragraph(f"{conflict.get('model')} · {conflict.get('field')}：{' / '.join(conflict.get('values') or [])}", style='List Bullet')
+            for source in conflict.get('sources') or []:
+                doc.add_paragraph(f"{source.get('value')} — {source.get('doc') or '企业资料'} P{source.get('page') or '?'}", style='List Bullet 2')
     out=BytesIO(); doc.save(out); out.seek(0)
     return StreamingResponse(out, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=proposal_v{row['version_no']}.docx"})
 
@@ -199,6 +207,10 @@ def proposal_xlsx(session_id: str, version_id: str, user=Depends(current_user)):
     row, p = proposal_payload(session_id, user, version_id)
     headers = ["标准字段","原始字段","型号","原始值","来源文档","页码","核验状态"]
     rows = [headers] + [[x.get("standard"),x.get("raw"),x.get("model"),x.get("value"),x.get("doc"),x.get("page"),x.get("status")] for x in p.get("normalized_rows", [])]
+    if p.get("conflicts"):
+        rows.append([]); rows.append(["参数冲突与待人工确认"])
+        for conflict in p.get("conflicts"):
+            rows.append([conflict.get("model"), conflict.get("field"), " / ".join(conflict.get("values") or []), "待人工确认"])
     def cell(value): return f'<c t="inlineStr"><is><t>{html.escape(str(value or ""))}</t></is></c>'
     sheet_rows = ''.join(f'<row r="{i}">' + ''.join(cell(v) for v in values) + '</row>' for i, values in enumerate(rows, 1))
     xml = f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>'
@@ -217,7 +229,8 @@ def proposal_pdf(session_id: str, version_id: str, user=Depends(current_user)):
     row, p = proposal_payload(session_id, user, version_id); pdf = fitz.open(); page = pdf.new_page(width=595, height=842)
     y=50; page.insert_text((50,y), row["title"], fontsize=16, fontname="china-s"); y+=28
     page.insert_text((50,y), f"方案版本：V{row['version_no']}", fontsize=10, fontname="china-s"); y+=24
-    sections=[("项目需求画像", "；".join(f"{k}：{v}" for k,v in (p.get("profile") or {}).items())), ("技术方案初稿",p.get("content") or "暂无方案正文")]
+    conflict_text = "无" if not p.get("conflicts") else "；".join(f"{c.get('model')}·{c.get('field')}：{' / '.join(c.get('values') or [])}（待人工确认）" for c in p.get("conflicts"))
+    sections=[("项目需求画像", "；".join(f"{k}：{v}" for k,v in (p.get("profile") or {}).items())), ("技术方案初稿",p.get("content") or "暂无方案正文"), ("参数冲突与待人工确认", conflict_text)]
     for heading, body in sections:
         if y>770: page=pdf.new_page(width=595,height=842); y=50
         page.insert_text((50,y),heading,fontsize=13,fontname="china-s"); y+=22
