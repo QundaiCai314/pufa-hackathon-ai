@@ -459,23 +459,29 @@ ${query}`
                     </ReactMarkdown>
 
                     {/* 回答依据摘要 */}
-                    {m.results && m.results.length > 0 && (
+                    {((m.results && m.results.length > 0) || (m.web_sources && m.web_sources.length > 0)) && (
                       <div style={{
                         marginTop: 16, paddingTop: 12, borderTop: '1px solid #f0eee6',
                         display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
                       }}>
                         <span style={{ fontSize: 11, color: '#6b7280' }}>回答依据</span>
-                        <Tag style={{ margin: 0, fontSize: 11, color: '#166534', background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                        {m.results && m.results.length > 0 && <Tag style={{ margin: 0, fontSize: 11, color: '#166534', background: '#f0fdf4', borderColor: '#bbf7d0' }}>
                           企业资料 · {m.results.length} 条
-                        </Tag>
-                        {m.results.some(r => r.source) && (
+                        </Tag>}
+                        {m.web_sources && m.web_sources.length > 0 && <Tag style={{ margin: 0, fontSize: 11, color: '#9a3412', background: '#fff7ed', borderColor: '#fed7aa' }}>
+                          公开网页 · {m.web_sources.length} 条
+                        </Tag>}
+                        {m.results && m.results.some(r => r.source) && (
                           <Tag style={{ margin: 0, fontSize: 11, color: '#1d4ed8', background: '#eff6ff', borderColor: '#bfdbfe' }}>
                             图片资料 · {m.results.filter(r => r.source).length} 张
                           </Tag>
                         )}
-                        <span style={{ fontSize: 11, color: '#9c9b96' }}>
+                        {m.results && <span style={{ fontSize: 11, color: '#9c9b96' }}>
                           {Array.from(new Set(m.results.map(r => r.doc).filter(Boolean))).slice(0, 2).join('、')}
-                        </span>
+                        </span>}
+                        {m.web_sources && m.web_sources.length > 0 && (!m.results || m.results.length === 0) && (
+                          <span style={{ fontSize: 11, color: '#9c9b96' }}>公开信息可能随时间变化，请以原始网页为准</span>
+                        )}
                       </div>
                     )}
 
