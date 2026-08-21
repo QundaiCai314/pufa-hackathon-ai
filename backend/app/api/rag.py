@@ -123,7 +123,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
     
     # 检测产品型号并补充上下文关键词
-    model_patterns = re.findall(r'(ST\d+[A-Z0-9]*|CESP\d+|E\d+)', request.query, re.IGNORECASE)
+    model_patterns = re.findall(r'(?:ST\d+[A-Z0-9]*|CESP\d+|E\d+|OCEAN\d+)', request.query, re.IGNORECASE)
     logger.info(f"Model detection: query='{request.query}', patterns={model_patterns}")
     if model_patterns:
         # CESP 是 PEM 制氢系统
@@ -162,7 +162,8 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     # 产品列表查询和产品介绍查询跳过此过滤
     pem_terms = ("pem", "质子交换膜", "制氢系统", "制氢设备", "cesp")
     is_product_intro = any(kw in request.query for kw in ("是什么", "介绍", "什么是"))
-    if not is_product_list_query and not is_product_intro and not request.doc and any(term in effective_query.lower() for term in pem_terms):
+    requested_non_pem_model = any(m.upper().startswith(('ST', 'E', 'OCEAN')) for m in model_patterns)
+    if not is_product_list_query and not is_product_intro and not requested_non_pem_model and not request.doc and any(term in effective_query.lower() for term in pem_terms):
         pem_results = [r for r in results if r.get("doc", "").startswith("01 氢璞2025产品单页") and r.get("page") in (17, 18)]
         if pem_results:
             results = pem_results

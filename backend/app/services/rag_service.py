@@ -249,6 +249,7 @@ class RAGService:
         hits = []
         for r in results:
             hits.append({
+                "id": str(r.id),
                 "score": r.score,
                 "text": r.payload.get("text", ""),
                 "doc": r.payload.get("doc", ""),
@@ -264,7 +265,7 @@ class RAGService:
 
         # 关键词增强：检测产品型号并提升匹配结果
         # 匹配 ST100G2、CESP250、E200 等型号
-        model_patterns = re.findall(r'(ST\d+[A-Z0-9]*|CESP\d+|E\d+)', query, re.IGNORECASE)
+        model_patterns = re.findall(r'(?:ST\d+[A-Z0-9]*|CESP\d+|E\d+|OCEAN\d+)', query, re.IGNORECASE)
         if model_patterns:
             boosted_hits = []
             other_hits = []
@@ -285,6 +286,43 @@ class RAGService:
             hits = boosted_hits + other_hits
         else:
             hits.sort(key=lambda x: x["score"], reverse=True)
+
+        # 型号精确召回：混合产品对比时，语义分数不能让其中一个型号的参数页被挤掉。
+        # 从较大的候选池中补回每个点名型号至少一条原始参数资料。
+        if model_patterns:
+            present_models = set()
+            for hit in hits:
+                upper = hit["text"].upper()
+                present_models.update(m.upper() for m in model_patterns if m.upper() in upper)
+            missing_models = [m for m in model_patterns if m.upper() not in present_models]
+            if missing_models:
+                extra_results = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=qdrant_filter,
+                    limit=1000,
+                    with_payload=True,
+                    with_vectors=False,
+                )[0]
+                seen_ids = {h.get("id") for h in hits}
+                for model in missing_models:
+                    model_upper = model.upper()
+                    matches = [point for point in extra_results if model_upper in point.payload.get("text", "").upper()]
+                    # 表格与结构化规格优先，其次才是普通文本；每个型号补最多两条，控制上下文长度。
+                    matches.sort(key=lambda p: 0 if (p.payload.get("table_rows") or p.payload.get("type") == "table") else 1)
+                    for point in matches[:2]:
+                        if str(point.id) in seen_ids:
+                            continue
+                        payload = point.payload
+                        hits.append({
+                            "id": str(point.id), "score": 1.0,
+                            "text": payload.get("text", ""), "doc": payload.get("doc", ""),
+                            "page": payload.get("page", 0), "type": payload.get("type", ""),
+                            "category": payload.get("category", ""), "case": payload.get("case", ""),
+                            "source": payload.get("source", ""), "table_headers": payload.get("table_headers", []),
+                            "table_rows": payload.get("table_rows", []), "table_title": payload.get("table_title", ""),
+                        })
+                        seen_ids.add(str(point.id))
+                logger.info("Exact model recall added results for: %s", missing_models)
 
         return hits[:top_k]
 
