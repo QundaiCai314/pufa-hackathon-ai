@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Input, Button, List, Tag, Typography, Spin, Empty, Space, Image,
+  Input, Button, List, Tag, Typography, Spin, Empty, Space, Image, Modal,
   Drawer, Popconfirm, Select, Card, Tooltip, App as AntApp,
 } from 'antd';
 import {
@@ -67,6 +67,10 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [role, setRole] = useState('customer_service');
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [selection, setSelection] = useState({
+    scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const authHeaders = {
@@ -166,6 +170,24 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  const handleSelectionSubmit = () => {
+    const details = [
+      selection.scene && `应用场景：${selection.scene}`,
+      selection.scale && `目标规模：${selection.scale}`,
+      selection.pressure && `用氢/出口压力：${selection.pressure}`,
+      selection.purity && `氢气纯度要求：${selection.purity}`,
+      selection.deployment && `部署方式：${selection.deployment}`,
+      selection.energy && `能源来源：${selection.energy}`,
+    ].filter(Boolean).join('；');
+    if (!details) {
+      message.warning('请至少填写应用场景或目标规模');
+      return;
+    }
+    setSelectionOpen(false);
+    setRole('sales');
+    handleSend(`请根据以下项目需求进行产品选型，并给出需求画像、推荐结论、匹配依据、待确认条件和下一步建议：${details}`);
+  };
 
   const handleSend = async (forcedQuery?: string, forceWeb = false) => {
     const query = (forcedQuery || input).trim();
@@ -511,6 +533,13 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
         />
         <div className="ppx-input-actions">
           <Space size={8}>
+            <Button
+              size="small"
+              onClick={() => setSelectionOpen(true)}
+              style={{ borderRadius: 14, borderColor: '#bbf7d0', color: '#166534', background: '#f0fdf4' }}
+            >
+              智能选型
+            </Button>
             <Tag color="default" style={{ margin: 0, borderRadius: 12, background: '#f0eee6', border: 'none', color: '#5f5e5a' }}>
               {role === 'customer_service' ? '智能客服' : role === 'sales' ? '金牌销售' : '技术专家'}
             </Tag>
@@ -525,6 +554,59 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
           />
         </div>
       </div>
+
+      {/* 智能选型表单 */}
+      <Modal
+        title="智能产品选型"
+        open={selectionOpen}
+        onCancel={() => setSelectionOpen(false)}
+        onOk={handleSelectionSubmit}
+        okText="开始选型"
+        cancelText="取消"
+        width={520}
+      >
+        <div style={{ color: '#7a7973', fontSize: 13, marginBottom: 16 }}>
+          填写项目条件，AI 将自动生成需求画像、推荐产品和待确认信息。至少填写一项即可开始。
+        </div>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Input
+            addonBefore="应用场景"
+            placeholder="如：风光制氢、重卡、船舶、分布式发电"
+            value={selection.scene}
+            onChange={e => setSelection({ ...selection, scene: e.target.value })}
+          />
+          <Input
+            addonBefore="目标规模"
+            placeholder="如：500Nm³/h、100kW、1000Nm³/h"
+            value={selection.scale}
+            onChange={e => setSelection({ ...selection, scale: e.target.value })}
+          />
+          <Input
+            addonBefore="压力要求"
+            placeholder="如：3MPag；没有可留空"
+            value={selection.pressure}
+            onChange={e => setSelection({ ...selection, pressure: e.target.value })}
+          />
+          <Input
+            addonBefore="纯度要求"
+            placeholder="如：99.999%；没有可留空"
+            value={selection.purity}
+            onChange={e => setSelection({ ...selection, purity: e.target.value })}
+          />
+          <Input
+            addonBefore="部署方式"
+            placeholder="如：撬装式、集装箱式、车载"
+            value={selection.deployment}
+            onChange={e => setSelection({ ...selection, deployment: e.target.value })}
+          />
+          <Input
+            addonBefore="能源来源"
+            placeholder="如：风电、光伏、电网；没有可留空"
+            value={selection.energy}
+            onChange={e => setSelection({ ...selection, energy: e.target.value })}
+          />
+        </div>
+      </Modal>
 
       {/* 历史对话抽屉 */}
       <Drawer
