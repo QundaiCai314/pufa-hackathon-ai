@@ -54,7 +54,7 @@ interface ChatSession {
 const ROLE_OPTIONS = [
   { value: 'customer_service', label: '智能客服' },
   { value: 'sales', label: '金牌销售' },
-  { value: 'technical', label: '技术专家' },
+  { value: 'technical_support', label: '技术专家' },
 ];
 
 export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?: string; clearPreset?: () => void }) {
