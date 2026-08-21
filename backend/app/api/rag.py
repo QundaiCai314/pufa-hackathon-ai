@@ -169,37 +169,25 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     # 产品列表查询：直接提取型号，不依赖 LLM
     logger.info(f"is_product_list_query={is_product_list_query}, results_count={len(results)}")
     if is_product_list_query:
-        # 从所有检索结果中提取产品型号
-        product_models = set()
-        for r in results:
-            chunk_text = r.get("text", "")
-            # 提取型号（ST开头或CESP开头）
-            models = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+)\b', chunk_text)
-            product_models.update(models)
-        
-        # 按类型分组
-        st_models = sorted([m for m in product_models if m.startswith("ST")])
-        cesp_models = sorted([m for m in product_models if m.startswith("CESP")])
-        
-        answer_parts = ["目前可查询到以下产品：", ""]
-        
-        if st_models:
-            answer_parts.append("**燃料电池电堆（ST系列）**：")
-            for m in st_models[:10]:
-                answer_parts.append(f"- {m}")
-            if len(st_models) > 10:
-                answer_parts.append(f"- 等共 {len(st_models)} 个型号")
-            answer_parts.append("")
-        
-        if cesp_models:
-            answer_parts.append("**PEM制氢系统（CESP系列）**：")
-            for m in cesp_models[:5]:
-                answer_parts.append(f"- {m}")
-            answer_parts.append("")
-        
-        answer_parts.append("请问您想详细了解哪一款产品的参数和特性？")
-        
-        answer = chr(10).join(answer_parts)
+        # 返回产品分类（不是具体型号）
+        answer = """目前可查询到以下产品：
+
+**燃料电池电堆系列**：
+- 氢璞第四代碳复合板电堆
+- 氢璞第五代碳复合板电堆
+- 氢璞第六代碳复合板电堆
+- 氢璞第七代碳复合板电堆
+- 氢璞阴极封闭式空冷电堆
+- 氢璞金属电堆
+
+**燃料电池系统**：
+- 氢璞E200氢燃料电池系统
+- 氢璞船用燃料电池系统
+
+**制氢设备**：
+- 氢璞撬装式PEM制氢系统
+
+请问您想详细了解哪一款产品的参数和特性？"""
     else:
         answer = await llm_service.generate_answer(
             query=effective_query,
