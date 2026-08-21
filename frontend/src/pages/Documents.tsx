@@ -237,7 +237,7 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
         }}>
           {[
             { label: '产品大类', value: groups.length, icon: <AppstoreOutlined /> },
-            { label: '产品型号', value: groups.reduce((s, g) => s + g.intro_products.length + g.spec_products.length, 0), icon: <RocketOutlined /> },
+            { label: '产品型号', value: groups.reduce((s, g) => s + (g.intro_products?.length || 0) + (g.spec_products?.length || 0), 0), icon: <RocketOutlined /> },
             { label: '表格', value: tables.length, icon: <TableOutlined /> },
             { label: '产品图片', value: images.length, icon: <PictureOutlined /> },
           ].map((s, i) => (
@@ -263,12 +263,12 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                   }}>
                     <Title level={5} style={{ marginTop: 0, marginBottom: 4 }}>{g.category_name}</Title>
                     {g.en_name && <Text type="secondary" style={{ fontSize: 12 }}>{g.en_name}</Text>}
-                    {g.features.length > 0 && (
+                    {g.features?.length > 0 && (
                       <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {g.features.map((f, j) => <Tag key={j} color="default" style={{ borderRadius: 6 }}>{f}</Tag>)}
                       </div>
                     )}
-                    {g.spec_products.length > 0 && (
+                    {g.spec_products?.length > 0 && (
                       <div style={{ marginTop: 14 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>产品参数</div>
                         <Table
