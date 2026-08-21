@@ -116,6 +116,20 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     is_product_list_query = any(kw in request.query for kw in product_list_keywords)
     logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
     
+    # 检测产品型号并补充上下文关键词
+    model_patterns = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+|E\d+)\b', request.query, re.IGNORECASE)
+    if model_patterns:
+        # CESP 是 PEM 制氢系统
+        if any(m.upper().startswith('CESP') for m in model_patterns):
+            effective_query = effective_query + " PEM 制氢系统 撬装式 电解水"
+        # ST 是燃料电池电堆
+        elif any(m.upper().startswith('ST') for m in model_patterns):
+            effective_query = effective_query + " 燃料电池电堆 氢璞"
+        # E 系列是燃料电池系统
+        elif any(m.upper().startswith('E') for m in model_patterns):
+            effective_query = effective_query + " 燃料电池系统"
+        logger.info(f"Detected models: {model_patterns}, enhanced query: {effective_query}")
+    
     is_pem = any(term in effective_query.lower() for term in ("pem", "质子交换膜", "制氢系统", "制氢设备", "cesp"))
     
     # 产品列表查询需要更多结果，并添加产品型号关键词
@@ -138,9 +152,10 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     
     # PEM 撬装系统的官方产品页是 P17。该类问题必须收敛到同一产品页，
     # 防止另一份宣传册的通用图片或 CESP 型号表混入回答。
-    # 产品列表查询跳过此过滤
+    # 产品列表查询和产品介绍查询跳过此过滤
     pem_terms = ("pem", "质子交换膜", "制氢系统", "制氢设备", "cesp")
-    if not is_product_list_query and not request.doc and any(term in effective_query.lower() for term in pem_terms):
+    is_product_intro = any(kw in request.query for kw in ("是什么", "介绍", "什么是"))
+    if not is_product_list_query and not is_product_intro and not request.doc and any(term in effective_query.lower() for term in pem_terms):
         pem_results = [r for r in results if r.get("doc", "").startswith("01 氢璞2025产品单页") and r.get("page") in (17, 18)]
         if pem_results:
             results = pem_results

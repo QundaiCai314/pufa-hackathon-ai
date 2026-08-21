@@ -224,7 +224,9 @@ class RAGService:
         doc_filter: Optional[str] = None,
         type_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """语义搜索"""
+        """语义搜索 + 关键词增强"""
+        import re
+        
         query_vec = await embedding_service.embed_query(query)
 
         # 构建过滤条件
@@ -240,7 +242,7 @@ class RAGService:
             collection_name=self.collection_name,
             query_vector=query_vec,
             query_filter=qdrant_filter,
-            limit=top_k * 3,
+            limit=top_k * 5,  # 取更多结果用于关键词过滤
             with_payload=True,
         )
 
@@ -260,7 +262,30 @@ class RAGService:
                 "table_title": r.payload.get("table_title", ""),
             })
 
-        hits.sort(key=lambda x: x["score"], reverse=True)
+        # 关键词增强：检测产品型号并提升匹配结果
+        # 匹配 ST100G2、CESP250、E200 等型号
+        model_patterns = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+|E\d+)\b', query, re.IGNORECASE)
+        if model_patterns:
+            boosted_hits = []
+            other_hits = []
+            for hit in hits:
+                text_upper = hit["text"].upper()
+                # 检查是否包含查询中的型号
+                has_model = any(m.upper() in text_upper for m in model_patterns)
+                if has_model:
+                    # 提升包含型号的结果
+                    hit["score"] = hit["score"] * 1.5
+                    boosted_hits.append(hit)
+                else:
+                    other_hits.append(hit)
+            
+            # 重新排序：boosted 优先，然后按分数
+            boosted_hits.sort(key=lambda x: x["score"], reverse=True)
+            other_hits.sort(key=lambda x: x["score"], reverse=True)
+            hits = boosted_hits + other_hits
+        else:
+            hits.sort(key=lambda x: x["score"], reverse=True)
+
         return hits[:top_k]
 
     def get_stats(self) -> Dict[str, Any]:
