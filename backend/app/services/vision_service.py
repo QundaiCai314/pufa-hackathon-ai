@@ -751,6 +751,46 @@ def _classify_brochure(doc_name: str, analysis: dict) -> dict:
     }
 
 
+def _generate_section_summary(title: str, raw_text: str) -> str:
+    """用 LLM 为章节生成用户友好的描述"""
+    if not raw_text or len(raw_text) < 50:
+        return raw_text
+    
+    prompt = f"""请将以下宣传册章节的原始文本整理成一段简洁、专业的介绍文字（100-150字）。
+
+章节标题：{title}
+
+原始文本：
+{raw_text[:2000]}
+
+要求：
+1. 去除重复内容、页码、导航文字
+2. 保留关键数据和事实
+3. 用流畅的中文描述
+4. 不要出现"本文""该页"等指代词
+5. 直接输出整理后的文字，不要额外说明"""
+
+    try:
+        resp = httpx.post(
+            f"{API_BASE}/chat/completions",
+            headers={"Authorization": f"Bearer {API_KEY}"},
+            json={
+                "model": VISION_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.3,
+            },
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.warning(f"LLM summary failed: {e}")
+    
+    # 失败时返回清理后的原文
+    return re.sub(r'\s+', ' ', raw_text)[:300]
+
+
 def get_classified_content(doc_name: str) -> dict:
     """
     从 GPT 分析结果中提取分类后的内容，供前端展示。
@@ -765,24 +805,29 @@ def get_classified_content(doc_name: str) -> dict:
         result = _classify_brochure(doc_name, analysis)
         # 将宣传册格式转换为前端期望的格式
         all_images = []
+        product_groups = []
         for section in result.get("sections", []):
             for img in section.get("all_images", []):
                 all_images.append(img)
+            
+            # 用 LLM 生成用户友好的描述
+            raw_text = section.get("raw_text", "")
+            summary = _generate_section_summary(section.get("title", ""), raw_text)
+            
+            product_groups.append({
+                "category_name": section.get("title", f"第{section.get('page_num',0)}页"),
+                "category_page": section.get("page_num", 0),
+                "en_name": section.get("page_type_label", ""),
+                "features": section.get("list_items", []),
+                "images": section.get("all_images", []),
+                "subsections": section.get("subsections", []),
+                "summary": summary,
+                "image_count": section.get("image_count", 0),
+            })
+        
         return {
             "doc_type": "brochure",
-            "product_groups": [
-                {
-                    "category_name": section.get("title", f"第{section.get('page_num',0)}页"),
-                    "category_page": section.get("page_num", 0),
-                    "en_name": section.get("page_type_label", ""),
-                    "features": section.get("list_items", []),
-                    "images": section.get("all_images", []),
-                    "subsections": section.get("subsections", []),
-                    "raw_text": section.get("raw_text", "")[:500],
-                    "image_count": section.get("image_count", 0),
-                }
-                for section in result.get("sections", [])
-            ],
+            "product_groups": product_groups,
             "tables": result.get("tables", []),
             "product_images": all_images,
             "contact_info": result.get("contact_info"),

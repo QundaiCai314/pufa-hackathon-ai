@@ -35,7 +35,7 @@ interface ProductGroup {
   spec_page: number | null;
   images?: { url: string; description: string; page: number; width?: number; height?: number }[];
   subsections?: { type: string; content: string }[];
-  raw_text?: string;
+  summary?: string;
   image_count?: number;
 }
 
@@ -229,42 +229,10 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
     const tables = classified.tables || [];
     const images = classified.product_images || [];
 
-    // 清理文本：去除多余空白和重复内容
+    // 清理文本：去除多余空白
     const cleanText = (text: string) => {
       if (!text) return '';
-      return text
-        .replace(/\s+/g, ' ')
-        .replace(/氢璞创能 NOWOGEN/g, '')
-        .replace(/Nowogen Introduction/g, '')
-        .replace(/Core capability/g, '')
-        .replace(/Market driven/g, '')
-        .replace(/Cooperative partner/g, '')
-        .replace(/Digital Platform/g, '')
-        .replace(/Operation Platform/g, '')
-        .replace(/Page \d+-\d+/g, '')
-        .replace(/\d+ \| /g, '')
-        .trim();
-    };
-
-    // 提取关键数据点（数字+描述）
-    const extractKeyPoints = (text: string) => {
-      if (!text) return [];
-      const points: { num: string; desc: string }[] = [];
-      const cleanText = text.split(String.fromCharCode(10)).join(' ');
-      const patterns = [
-        /(\d+)[：:]\s*([^。]+)/g,
-        /(\d+\/\d+代)[：:]\s*([^。]+)/g,
-        /(\d+亿)[：:]\s*([^。]+)/g,
-        /(\d+\+)[：:]\s*([^。]+)/g,
-        /(\d+万)[：:]\s*([^。]+)/g,
-      ];
-      patterns.forEach(p => {
-        let m;
-        while ((m = p.exec(cleanText)) !== null) {
-          points.push({ num: m[1], desc: m[2].trim() });
-        }
-      });
-      return points.slice(0, 6);
+      return text.replace(/\s+/g, ' ').trim();
     };
 
     return (
@@ -300,102 +268,74 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
 
         {/* 内容区 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-          {groups.map((g, i) => {
-            const keyPoints = extractKeyPoints(g.raw_text || '');
-            const cleanContent = cleanText(g.raw_text || '');
-            const paragraphs = cleanContent.split(/(?=[。！？])/).filter(p => p.trim().length > 10);
-
-            return (
-              <section key={i} id={`section-${i}`} style={{ scrollMarginTop: 20 }}>
-                {/* 章节标题 */}
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                    <span style={{
-                      width: 32, height: 32, borderRadius: 8, background: '#111',
-                      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 14, fontWeight: 600,
-                    }}>
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <Title level={3} style={{ margin: 0, fontWeight: 600 }}>{g.category_name}</Title>
-                  </div>
-                  {g.en_name && (
-                    <Text type="secondary" style={{ fontSize: 13, marginLeft: 44 }}>{g.en_name}</Text>
-                  )}
+          {groups.map((g, i) => (
+            <section key={i} id={`section-${i}`} style={{ scrollMarginTop: 20 }}>
+              {/* 章节标题 */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                  <span style={{
+                    width: 32, height: 32, borderRadius: 8, background: '#111',
+                    color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 600,
+                  }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <Title level={3} style={{ margin: 0, fontWeight: 600 }}>{g.category_name}</Title>
                 </div>
-
-                {/* 关键数据卡片 */}
-                {keyPoints.length > 0 && (
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                    gap: 12, marginBottom: 20,
-                  }}>
-                    {keyPoints.map((kp, j) => (
-                      <div key={j} style={{
-                        background: '#f0fdf4', borderRadius: 10, padding: '14px 16px',
-                        border: '1px solid #bbf7d0',
-                      }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: '#166534' }}>{kp.num}</div>
-                        <div style={{ fontSize: 12, color: '#15803d', marginTop: 4, lineHeight: 1.4 }}>{kp.desc}</div>
-                      </div>
-                    ))}
-                  </div>
+                {g.en_name && (
+                  <Text type="secondary" style={{ fontSize: 13, marginLeft: 44 }}>{g.en_name}</Text>
                 )}
+              </div>
 
-                {/* 特性列表 */}
-                {g.features && g.features.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    {g.features.map((f, j) => (
-                      <div key={j} style={{
-                        display: 'flex', gap: 10, marginBottom: 8, fontSize: 14, color: '#374151',
-                      }}>
-                        <span style={{ color: '#10b981', fontWeight: 600 }}>✓</span>
-                        <span>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* LLM 生成的描述 */}
+              {g.summary && (
+                <Paragraph style={{
+                  fontSize: 15, color: '#374151', lineHeight: 1.9, marginBottom: 20,
+                }}>
+                  {g.summary}
+                </Paragraph>
+              )}
 
-                {/* 正文段落 */}
-                {paragraphs.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    {paragraphs.slice(0, 5).map((p, j) => (
-                      <Paragraph key={j} style={{
-                        fontSize: 14, color: '#4b5563', lineHeight: 1.9, marginBottom: 12,
-                      }}>
-                        {p.trim()}
-                      </Paragraph>
-                    ))}
-                  </div>
-                )}
+              {/* 特性列表 */}
+              {g.features && g.features.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  {g.features.slice(0, 6).map((f, j) => (
+                    <div key={j} style={{
+                      display: 'flex', gap: 10, marginBottom: 8, fontSize: 14, color: '#374151',
+                    }}>
+                      <span style={{ color: '#10b981', fontWeight: 600 }}>✓</span>
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                {/* 图片展示 */}
-                {(g.images || []).length > 0 && (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: (g.images || []).length === 1 ? '1fr' : 'repeat(auto-fill, minmax(200px, 1fr))',
-                    gap: 12,
-                  }}>
-                    {(g.images || []).map((img, j) => (
-                      <div key={j} style={{ borderRadius: 10, overflow: 'hidden', background: '#f3f4f6' }}>
-                        <AntImage
-                          src={`${API}${img.url}`}
-                          alt={img.description}
-                          style={{ width: '100%', display: 'block' }}
-                          fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
-                        />
-                        {img.description && (
-                          <div style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280' }}>
-                            {img.description}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
+              {/* 图片展示 */}
+              {(g.images || []).length > 0 && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: (g.images || []).length === 1 ? '1fr' : 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: 12,
+                }}>
+                  {(g.images || []).map((img, j) => (
+                    <div key={j} style={{ borderRadius: 10, overflow: 'hidden', background: '#f3f4f6' }}>
+                      <AntImage
+                        src={`${API}${img.url}`}
+                        alt={img.description}
+                        style={{ width: '100%', display: 'block' }}
+                        fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
+                      />
+                      {img.description && (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280' }}>
+                          {img.description}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
         </div>
 
         {/* 表格区 */}
