@@ -173,6 +173,21 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  const handleAddToCompare = (model: string) => {
+    setCompareModels(prev => prev.includes(model) ? prev : [...prev, model]);
+    message.success(`${model} 已加入对比`);
+    setCompareOpen(true);
+  };
+
+  const getProductModels = (results?: SearchResult[]) => {
+    const models = new Set<string>();
+    (results || []).forEach(r => {
+      const found = r.text.match(/(?:ST\d+[A-Z0-9]*|CESP\d+|E\d+)/gi) || [];
+      found.forEach(model => models.add(model.toUpperCase()));
+    });
+    return Array.from(models).slice(0, 6);
+  };
+
   const handleCompareSubmit = () => {
     if (compareModels.length < 2) {
       message.warning('请至少选择两款产品进行对比');
@@ -389,6 +404,34 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
                       </div>
                     )}
                   </div>
+
+                  {/* 产品快捷卡片 */}
+                  {getProductModels(m.results).length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, color: '#9c9b96', marginBottom: 6 }}>
+                        本轮识别的产品
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {getProductModels(m.results).map(model => (
+                          <div key={model} style={{
+                            minWidth: 142, padding: '10px 12px', borderRadius: 9,
+                            background: '#fff', border: '1px solid #dbeafe',
+                          }}>
+                            <div style={{ fontWeight: 650, fontSize: 13, color: '#1e3a5f' }}>{model}</div>
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                              {model.startsWith('CESP') ? 'PEM制氢系统' : model.startsWith('ST') ? '燃料电池电堆' : '燃料电池系统'}
+                            </div>
+                            <Button
+                              type="link" size="small" style={{ padding: 0, height: 18, fontSize: 11, color: '#2563eb' }}
+                              onClick={() => handleAddToCompare(model)}
+                            >
+                              加入对比
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 相关产品图片：仅展示检索结果中的图片来源 */}
                   {m.results && m.results.some(r => r.source) && (
