@@ -299,7 +299,7 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                         {(g.images || []).map((img, j) => (
                           <AntImage
                             key={j}
-                            src={img.url}
+                            src={`${API}${img.url}`}
                             alt={img.description}
                             style={{ width: '100%', borderRadius: 8 }}
                             fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
@@ -342,7 +342,7 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                     padding: 12,
                   }}>
                     <AntImage
-                      src={img.url || `${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
+                      src={img.url ? `${API}${img.url}` : `${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
                       alt={img.description}
                       style={{ width: '100%', borderRadius: 8 }}
                       fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
