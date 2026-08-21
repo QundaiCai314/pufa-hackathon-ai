@@ -221,6 +221,9 @@ async def chat_stream(request: ChatRequest, user=Depends(current_user)):
 @router.post("/rag/index/{filename}")
 async def index_document(filename: str):
     """索引文档到 Qdrant"""
+    # 先检查是否已索引，避免重复全量重建导致超时
+    if rag_service.is_indexed(filename):
+        return IndexResponse(doc=filename, chunks_indexed=0, status="already_indexed")
     analysis = get_gpt_analysis(filename)
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found. Run analysis first.")

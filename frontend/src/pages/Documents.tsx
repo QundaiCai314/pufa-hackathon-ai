@@ -17,6 +17,7 @@ interface DocumentItem {
   filename: string;
   file_size: number;
   parsed: boolean;
+  indexed: boolean;
   upload_time?: string;
   analyzed?: boolean;
   page_count?: number;
@@ -194,7 +195,12 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
         { method: 'POST', headers: authHeaders },
       );
       if (!res.ok) throw new Error('索引失败');
-      message.success('已加入向量索引，可在问答中使用');
+      const data = await res.json();
+      if (data.status === 'already_indexed') {
+        message.info('该文档已索引，无需重复操作');
+      } else {
+        message.success('已加入向量索引，可在问答中使用');
+      }
       await loadDocs();
     } catch (e: any) {
       message.error(e.message);
@@ -409,8 +415,8 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                 <Button
                   size="small" icon={<ApartmentOutlined />}
                   onClick={() => handleIndex(d.filename)}
-                  disabled={!d.analyzed}
-                >索引</Button>
+                  disabled={!d.analyzed || d.indexed}
+                >{d.indexed ? '已索引' : '索引'}</Button>
               </div>
             </div>
           ))}

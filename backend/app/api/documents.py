@@ -23,6 +23,7 @@ from app.services.vision_service import (
 )
 from app.services.vision_service import ANALYSIS_BASE
 from app.services.image_enrich import enrich_image_descriptions
+from app.services.rag_service import rag_service
 
 logger = logging.getLogger(__name__)
 
@@ -209,10 +210,12 @@ async def list_documents():
                     parsed = True
                 except:
                     pass
+                indexed = rag_service.is_indexed(Path(f).stem) if parsed else False
                 documents.append({
                     "filename": f,
                     "file_size": os.path.getsize(file_path),
                     "parsed": parsed,
+                    "indexed": indexed,
                 })
 
     return {"status": "ok", "documents": documents, "total": len(documents)}

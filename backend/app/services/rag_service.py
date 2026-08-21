@@ -278,6 +278,17 @@ class RAGService:
         except Exception as e:
             return {"collection": self.collection_name, "error": str(e)[:100]}
 
+    def is_indexed(self, doc_name: str) -> bool:
+        """检查文档是否已向量化"""
+        try:
+            result = self.client.count(
+                collection_name=self.collection_name,
+                count_filter=Filter(must=[FieldCondition(key="doc", match=MatchValue(value=doc_name))]),
+            )
+            return result.count > 0
+        except Exception:
+            return False
+
     def delete_document(self, doc_name: str):
         """删除文档的所有索引"""
         self.client.delete(
