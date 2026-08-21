@@ -356,6 +356,33 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
                     )}
                   </div>
 
+                  {/* 相关产品图片：仅展示检索结果中的图片来源 */}
+                  {m.results && m.results.some(r => r.source) && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, color: '#9c9b96', marginBottom: 6 }}>
+                        相关产品图片
+                      </div>
+                      <Image.PreviewGroup>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {m.results.filter(r => r.source).slice(0, 4).map((r, i) => {
+                            const imageUrl = r.source.startsWith('http') ? r.source : `${API}${r.source}`;
+                            return (
+                              <Image
+                                key={i}
+                                src={imageUrl}
+                                alt={r.text || '相关产品图片'}
+                                width={120}
+                                height={82}
+                                preview={{ mask: '查看大图' }}
+                                style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </Image.PreviewGroup>
+                    </div>
+                  )}
+
                   {/* 知识库来源 - 缩小版 */}
                   {m.results && m.results.length > 0 && (
                     <div style={{ marginTop: 10 }}>
