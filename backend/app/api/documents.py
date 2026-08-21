@@ -8,6 +8,7 @@ import os
 import json
 import re
 import logging
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query
@@ -375,7 +376,9 @@ async def get_classified_content_api(filename: str):
     返回按类型分类的内容：产品参数表、文本块、图片描述、联系方式等。
     """
     doc_name = Path(filename).stem
-    result = get_classified_content(doc_name)
+    # 在线程池中运行，避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, get_classified_content, doc_name)
     
     if "error" in result:
         raise HTTPException(404, result["error"])

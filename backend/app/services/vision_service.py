@@ -756,6 +756,17 @@ def _generate_section_summary(title: str, raw_text: str) -> str:
     if not raw_text or len(raw_text) < 50:
         return raw_text
     
+    # 缓存路径
+    cache_dir = os.path.join(ANALYSIS_BASE, "_summaries")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_key = f"{hash(title + raw_text[:500])}.txt"
+    cache_path = os.path.join(cache_dir, cache_key)
+    
+    # 读取缓存
+    if os.path.exists(cache_path):
+        with open(cache_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    
     prompt = f"""请将以下宣传册章节的原始文本整理成一段简洁、专业的介绍文字（100-150字）。
 
 章节标题：{title}
@@ -780,15 +791,29 @@ def _generate_section_summary(title: str, raw_text: str) -> str:
                 "max_tokens": 300,
                 "temperature": 0.3,
             },
-            timeout=30,
+            timeout=15,
         )
         if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"].strip()
+            summary = resp.json()["choices"][0]["message"]["content"].strip()
+            # 写入缓存
+            with open(cache_path, "w", encoding="utf-8") as f:
+                f.write(summary)
+            return summary
     except Exception as e:
         logger.warning(f"LLM summary failed: {e}")
     
     # 失败时返回清理后的原文
     return re.sub(r'\s+', ' ', raw_text)[:300]
+
+
+async def _generate_summaries_async(sections: list) -> list:
+    """并发生成所有章节的摘要"""
+    loop = asyncio.get_event_loop()
+    tasks = [
+        loop.run_in_executor(None, _generate_section_summary, s.get("title", ""), s.get("raw_text", ""))
+        for s in sections
+    ]
+    return await asyncio.gather(*tasks)
 
 
 def get_classified_content(doc_name: str) -> dict:
@@ -806,13 +831,14 @@ def get_classified_content(doc_name: str) -> dict:
         # 将宣传册格式转换为前端期望的格式
         all_images = []
         product_groups = []
-        for section in result.get("sections", []):
+        sections = result.get("sections", [])
+        
+        # 并发生成所有章节的摘要
+        summaries = asyncio.run(_generate_summaries_async(sections))
+        
+        for i, section in enumerate(sections):
             for img in section.get("all_images", []):
                 all_images.append(img)
-            
-            # 用 LLM 生成用户友好的描述
-            raw_text = section.get("raw_text", "")
-            summary = _generate_section_summary(section.get("title", ""), raw_text)
             
             product_groups.append({
                 "category_name": section.get("title", f"第{section.get('page_num',0)}页"),
@@ -821,7 +847,7 @@ def get_classified_content(doc_name: str) -> dict:
                 "features": section.get("list_items", []),
                 "images": section.get("all_images", []),
                 "subsections": section.get("subsections", []),
-                "summary": summary,
+                "summary": summaries[i] if i < len(summaries) else "",
                 "image_count": section.get("image_count", 0),
             })
         
