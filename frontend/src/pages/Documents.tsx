@@ -397,25 +397,26 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {d.parsed && <Tag color="default" style={{ borderRadius: 6 }}>已解析</Tag>}
-                {d.analyzed && <Tag color="green" style={{ borderRadius: 6 }}>AI 分析</Tag>}
+                {d.parsed && <Tag color="green" style={{ borderRadius: 6 }}>AI 分析</Tag>}
+                {d.indexed && <Tag color="blue" style={{ borderRadius: 6 }}>已索引</Tag>}
                 {d.has_vector_index && <Tag color="blue" style={{ borderRadius: 6 }}>向量索引</Tag>}
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                 <Button
                   size="small" icon={<EyeOutlined />}
                   onClick={() => openDoc(d.filename)}
-                  disabled={!d.analyzed}
+                  disabled={!d.parsed}
                 >查看</Button>
                 <Button
                   size="small" icon={<RocketOutlined />}
                   loading={analyzing === d.filename}
                   onClick={() => handleAnalyze(d.filename)}
                   disabled={!d.parsed}
-                >{d.analyzed ? '重新分析' : 'AI 分析'}</Button>
+                >{d.parsed ? '重新分析' : 'AI 分析'}</Button>
                 <Button
                   size="small" icon={<ApartmentOutlined />}
                   onClick={() => handleIndex(d.filename)}
-                  disabled={!d.analyzed || d.indexed}
+                  disabled={!d.parsed || d.indexed}
                 >{d.indexed ? '已索引' : '索引'}</Button>
               </div>
             </div>
