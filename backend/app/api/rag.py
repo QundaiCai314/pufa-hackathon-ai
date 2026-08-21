@@ -3,6 +3,7 @@ RAG API 路由 - 检索增强生成
 """
 import os
 import json
+import re
 import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
@@ -109,17 +110,37 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     effective_query = request.query
     if request.context_query:
         effective_query = f"{request.context_query} {request.query}"
+    
+    # 检测产品列表类查询
+    product_list_keywords = ("产品有哪些", "有哪些产品", "所有产品", "产品列表", "产品型号", "全部产品", "产品介绍")
+    is_product_list_query = any(kw in request.query for kw in product_list_keywords)
+    logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
+    
     is_pem = any(term in effective_query.lower() for term in ("pem", "质子交换膜", "制氢系统", "制氢设备", "cesp"))
+    
+    # 产品列表查询需要更多结果，并添加产品型号关键词
+    if is_product_list_query:
+        search_top_k = 30
+        # 添加产品相关关键词帮助检索
+        effective_query = effective_query + " ST100G2 ST200G3 CESP250 CESP500 CESP1000 电堆 制氢系统"
+    elif is_pem:
+        search_top_k = max(request.top_k, 20)
+    elif request.role == "sales":
+        search_top_k = max(request.top_k, 10)
+    else:
+        search_top_k = request.top_k
+    
     results = await rag_service.search(
         query=(effective_query + " CESP250 CESP500 CESP1000") if is_pem else effective_query,
-        top_k=max(request.top_k, 20) if is_pem else (max(request.top_k, 10) if request.role == "sales" else request.top_k),
+        top_k=search_top_k,
         doc_filter=request.doc,
     )
     
     # PEM 撬装系统的官方产品页是 P17。该类问题必须收敛到同一产品页，
     # 防止另一份宣传册的通用图片或 CESP 型号表混入回答。
+    # 产品列表查询跳过此过滤
     pem_terms = ("pem", "质子交换膜", "制氢系统", "制氢设备", "cesp")
-    if not request.doc and any(term in effective_query.lower() for term in pem_terms):
+    if not is_product_list_query and not request.doc and any(term in effective_query.lower() for term in pem_terms):
         pem_results = [r for r in results if r.get("doc", "").startswith("01 氢璞2025产品单页") and r.get("page") in (17, 18)]
         if pem_results:
             results = pem_results
@@ -145,12 +166,47 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
         return {"query": request.query, "answer": answer, "results": [], "count": 0, "followups": [], "web_sources": [], "mode": "knowledge", "lead": lead, "no_result": True, "web_available": bool(should_web)}
 
     # 3. LLM 生成回答
-    answer = await llm_service.generate_answer(
-        query=effective_query,
-        search_results=results,
-        history=request.history,
-        role=request.role,
-    )
+    # 产品列表查询：直接提取型号，不依赖 LLM
+    logger.info(f"is_product_list_query={is_product_list_query}, results_count={len(results)}")
+    if is_product_list_query:
+        # 从所有检索结果中提取产品型号
+        product_models = set()
+        for r in results:
+            text = r.get("text", "")
+            # 提取型号（ST开头或CESP开头）
+            models = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+)\b', text)
+            product_models.update(models)
+        
+        # 按类型分组
+        st_models = sorted([m for m in product_models if m.startswith("ST")])
+        cesp_models = sorted([m for m in product_models if m.startswith("CESP")])
+        
+        answer_parts = ["目前可查询到以下产品：", ""]
+        
+        if st_models:
+            answer_parts.append("**燃料电池电堆（ST系列）**：")
+            for m in st_models[:10]:
+                answer_parts.append(f"- {m}")
+            if len(st_models) > 10:
+                answer_parts.append(f"- 等共 {len(st_models)} 个型号")
+            answer_parts.append("")
+        
+        if cesp_models:
+            answer_parts.append("**PEM制氢系统（CESP系列）**：")
+            for m in cesp_models[:5]:
+                answer_parts.append(f"- {m}")
+            answer_parts.append("")
+        
+        answer_parts.append("请问您想详细了解哪一款产品的参数和特性？")
+        
+        answer = chr(10).join(answer_parts)
+    else:
+        answer = await llm_service.generate_answer(
+            query=effective_query,
+            search_results=results,
+            history=request.history,
+            role=request.role,
+        )
     followups = await llm_service.generate_followups(request.query, results)
 
     # 4. 首轮问答后自动生成会话标题

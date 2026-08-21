@@ -203,12 +203,17 @@ class LLMService:
         search_results: List[dict],
         history: Optional[List[dict]] = None,
         role: str = "customer_service",
+        extra_instruction: Optional[str] = None,
     ) -> str:
         """基于搜索结果生成回答"""
         
         context = self._build_context(search_results)
         
         system_content = SYSTEM_PROMPT.format(context=context) + "\n\n" + ROLE_PROMPTS.get(role, ROLE_PROMPTS["customer_service"])
+        
+        # 添加额外指令
+        if extra_instruction:
+            system_content += f"\n\n【特殊指令】\n{extra_instruction}"
         
         messages = [
             {"role": "system", "content": system_content}
