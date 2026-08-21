@@ -240,10 +240,10 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24,
         }}>
           {[
-            { label: '产品大类', value: groups.length, icon: <AppstoreOutlined /> },
-            { label: '产品型号', value: groups.reduce((s, g) => s + (g.intro_products?.length || 0) + (g.spec_products?.length || 0), 0), icon: <RocketOutlined /> },
-            { label: '表格', value: tables.length, icon: <TableOutlined /> },
+            { label: '章节', value: groups.length, icon: <AppstoreOutlined /> },
             { label: '产品图片', value: images.length, icon: <PictureOutlined /> },
+            { label: '表格', value: tables.length, icon: <TableOutlined /> },
+            { label: '关键特性', value: groups.reduce((s, g) => s + (g.features?.length || 0), 0), icon: <RocketOutlined /> },
           ].map((s, i) => (
             <div key={i} style={{
               background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: '16px 18px',
@@ -258,58 +258,71 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
 
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
-            key: 'groups', label: '产品大类',
-            children: groups.length === 0 ? <Empty description="暂无产品大类" /> : (
-              <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                {groups.map((g, i) => (
-                  <div key={i} style={{
-                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 20,
+            key: 'groups', label: '内容概览',
+            children: groups.length === 0 ? <Empty description="暂无内容" /> : (
+              <div>
+                {/* 封面/标题区 */}
+                {groups[0] && (
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f0f7f4 0%, #e8f4f8 100%)',
+                    borderRadius: 16, padding: '32px 36px', marginBottom: 24,
                   }}>
-                    <Title level={5} style={{ marginTop: 0, marginBottom: 4 }}>{g.category_name}</Title>
-                    {g.en_name && <Text type="secondary" style={{ fontSize: 12 }}>{g.en_name}</Text>}
-                    {g.features?.length > 0 && (
-                      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {g.features.map((f, j) => <Tag key={j} color="default" style={{ borderRadius: 6 }}>{f}</Tag>)}
-                      </div>
-                    )}
-                    {g.spec_products?.length > 0 && (
-                      <div style={{ marginTop: 14 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>产品参数</div>
-                        <Table
-                          size="small"
-                          pagination={false}
-                          dataSource={g.spec_products.map((p, j) => ({ key: j, model: p.model, ...p.specs }))}
-                          columns={[
-                            { title: '型号', dataIndex: 'model', key: 'model', width: 140, fixed: 'left' },
-                            ...Object.keys(g.spec_products[0]?.specs || {}).map((k) => ({
-                              title: k, dataIndex: k, key: k, ellipsis: true,
-                            })),
-                          ]}
-                          scroll={{ x: 'max-content' }}
-                        />
-                      </div>
-                    )}
-                    {g.raw_text && g.raw_text.length > 10 && (
-                      <div style={{ marginTop: 14, fontSize: 13, color: '#5f5e5a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                        {g.raw_text}
-                      </div>
-                    )}
-                    {(g.images || []).length > 0 && (
-                      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-                        {(g.images || []).map((img, j) => (
-                          <AntImage
-                            key={j}
-                            src={`${API}${img.url}`}
-                            alt={img.description}
-                            style={{ width: '100%', borderRadius: 8 }}
-                            fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
-                          />
-                        ))}
-                      </div>
+                    <Title level={2} style={{ margin: 0, fontWeight: 600 }}>{groups[0].category_name}</Title>
+                    {groups[0].en_name && <Text style={{ fontSize: 14, color: '#6b7280' }}>{groups[0].en_name}</Text>}
+                    {groups[0].raw_text && (
+                      <Paragraph style={{ marginTop: 16, fontSize: 14, color: '#4b5563', lineHeight: 1.8 }}>
+                        {groups[0].raw_text.substring(0, 300)}
+                      </Paragraph>
                     )}
                   </div>
-                ))}
-              </Space>
+                )}
+
+                {/* 内容卡片流 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+                  {groups.slice(1).map((g, i) => (
+                    <div key={i} style={{
+                      background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px',
+                      transition: 'box-shadow 0.2s',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Title level={5} style={{ margin: 0, fontWeight: 600, flex: 1 }}>{g.category_name}</Title>
+                        {g.en_name && <Tag style={{ fontSize: 11, marginLeft: 8, flexShrink: 0 }}>{g.en_name}</Tag>}
+                      </div>
+                      {g.features?.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          {g.features.slice(0, 3).map((f, j) => (
+                            <div key={j} style={{ fontSize: 13, color: '#374151', marginBottom: 4, display: 'flex', gap: 6 }}>
+                              <span style={{ color: '#10b981', flexShrink: 0 }}>•</span>
+                              <span>{f}</span>
+                            </div>
+                          ))}
+                          {g.features.length > 3 && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>+{g.features.length - 3} 项</Text>
+                          )}
+                        </div>
+                      )}
+                      {g.raw_text && g.raw_text.length > 10 && (
+                        <Paragraph style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }} ellipsis={{ rows: 4 }}>
+                          {g.raw_text}
+                        </Paragraph>
+                      )}
+                      {(g.images || []).length > 0 && (
+                        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: `repeat(${Math.min((g.images || []).length, 3)}, 1fr)`, gap: 6 }}>
+                          {(g.images || []).slice(0, 3).map((img, j) => (
+                            <AntImage
+                              key={j}
+                              src={`${API}${img.url}`}
+                              alt={img.description}
+                              style={{ width: '100%', borderRadius: 6, aspectRatio: '1', objectFit: 'cover' }}
+                              fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ),
           },
           {
