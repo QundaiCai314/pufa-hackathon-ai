@@ -76,6 +76,13 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [profile, setProfile] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const profileRequiredFields = ['应用场景', '目标规模', '压力要求', '部署方式', '能源来源'];
+  const profileLabels: Record<string, string> = {
+    '应用场景': '应用场景', '目标规模': '目标规模', '压力要求': '压力要求',
+    '纯度要求': '纯度要求', '部署方式': '部署方式', '能源来源': '能源来源',
+  };
+  const profileMissing = profileRequiredFields.filter(field => !profile[field]);
+
   const authHeaders = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -414,6 +421,19 @@ ${query}`
           <div style={{ marginTop: 7, fontSize: 11, color: '#a18a52' }}>
             AI 会结合这份画像进行后续产品推荐与方案分析
           </div>
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, height: 5, borderRadius: 4, background: '#f1e8bd', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round(((profileRequiredFields.length - profileMissing.length) / profileRequiredFields.length) * 100)}%`, height: '100%', background: '#c89524', borderRadius: 4 }} />
+            </div>
+            <span style={{ fontSize: 10, color: '#8c722d', whiteSpace: 'nowrap' }}>
+              信息完整度 {Math.round(((profileRequiredFields.length - profileMissing.length) / profileRequiredFields.length) * 100)}%
+            </span>
+          </div>
+          {profileMissing.length > 0 && (
+            <div style={{ marginTop: 6, fontSize: 11, color: '#9a7b32' }}>
+              建议补充：{profileMissing.map(field => profileLabels[field]).join('、')}
+            </div>
+          )}
         </div>
       )}
 
