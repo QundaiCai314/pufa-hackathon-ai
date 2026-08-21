@@ -1,140 +1,125 @@
-import React, { useEffect, useState } from 'react';
-import { ConfigProvider, Layout, Typography, Spin, Alert, Menu } from 'antd';
-import zhCN from 'antd/locale/zh_CN';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  HomeOutlined, FileTextOutlined, MessageOutlined, LogoutOutlined,
+  Layout, Menu, Button, App as AntApp,
+} from 'antd';
+import {
+  HomeOutlined, FileTextOutlined, MessageOutlined, SettingOutlined,
+  PlusOutlined, LogoutOutlined,
 } from '@ant-design/icons';
-import axios from 'axios';
-import DocumentsPage from './pages/Documents';
-import ChatPage from './pages/Chat';
-import AdminPage from './pages/Admin';
 import Login from './pages/Login';
+import Home from './pages/Home';
+import Chat from './pages/Chat';
+import Documents from './pages/Documents';
+import Admin from './pages/Admin';
 import './App.css';
 
-const { Header, Content, Footer } = Layout;
-const { Title, Paragraph } = Typography;
+const { Sider, Content } = Layout;
 
-interface SystemInfo {
-  status?: string;
-  message?: string;
-  version?: string;
-  app_name?: string;
-  company?: string;
-  description?: string;
-  features?: string[];
-}
+// 持久化登录态
+const AUTH_KEY = 'qingpu_auth';
+const getAuth = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch { return null; } };
+const setAuth = (v: any) => localStorage.setItem(AUTH_KEY, JSON.stringify(v));
+const clearAuth = () => localStorage.removeItem(AUTH_KEY);
 
-const HomePage: React.FC = () => {
-  const [systemInfo, setSystemInfo] = useState<SystemInfo>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-        const rootResponse = await axios.get(`${apiUrl}/`);
-        const infoResponse = await axios.get(`${apiUrl}/api/v1/info`);
-        setSystemInfo({ ...rootResponse.data, ...infoResponse.data });
-        setLoading(false);
-      } catch (err: any) {
-        setError(err.message || '无法连接到后端服务');
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" />
-        <Paragraph style={{ marginTop: 20 }}>正在连接后端服务...</Paragraph>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert
-        message="连接失败"
-        description={`无法连接到后端服务: ${error}`}
-        type="error"
-        showIcon
-      />
-    );
-  }
-
-  return (
-    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-      <Alert
-        message="🎉 系统运行正常"
-        description={
-          <div>
-            <Paragraph><strong>版本：</strong>{systemInfo.version} | <strong>环境：</strong>Docker 全栈部署</Paragraph>
-            <Paragraph><strong>企业：</strong>{systemInfo.company}</Paragraph>
-            <Paragraph><strong>描述：</strong>{systemInfo.description}</Paragraph>
-            {systemInfo.features && (
-              <div>
-                <strong>核心功能：</strong>
-                <ul style={{ marginTop: 8 }}>
-                  {systemInfo.features.map((f, i) => <li key={i}>{f}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-        }
-        type="success"
-        showIcon
-      />
-    </div>
-  );
-};
+type Page = 'home' | 'chat' | 'documents' | 'admin';
 
 const App: React.FC = () => {
-  const [auth, setAuth] = useState<any>(() => { try { return JSON.parse(localStorage.getItem('qingpu_auth') || 'null'); } catch { return null; } });
-  const [currentPage, setCurrentPage] = useState('home');
+  const { message } = AntApp.useApp();
+  const [auth, setAuthState] = useState<any>(getAuth());
+  const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [chatPreset, setChatPreset] = useState<string | undefined>(undefined);
 
-  if (!auth?.token) return <Login onLogin={setAuth} />;
+  const isAdmin = !!auth?.user?.is_admin;
 
-  const logout = () => { localStorage.removeItem('qingpu_auth'); setAuth(null); };
+  useEffect(() => {
+    document.title = '氢璞 AI · 企业知识助手';
+  }, []);
+
+  if (!auth?.token) return <Login onLogin={(d) => { setAuth(d); setAuthState(d); }} />;
+
+  const logout = () => {
+    clearAuth();
+    setAuthState(null);
+    message.success('已退出登录');
+  };
+
+  const goChat = (preset?: string) => {
+    setChatPreset(preset);
+    setCurrentPage('chat');
+  };
 
   return (
-    <ConfigProvider locale={zhCN}>
-      <Layout style={{ minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <Title level={3} style={{ color: 'white', margin: 0, marginRight: 40 }}>
-            氢璞 AI 智能助手
-          </Title>
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider width={260} style={{ background: '#fbfbf7', borderRight: '1px solid #ecece4' }}>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div
+            onClick={() => setCurrentPage('home')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+              padding: '4px 6px', marginBottom: 28,
+            }}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, background: '#111',
+              color: '#fff', display: 'grid', placeItems: 'center',
+              fontWeight: 700, fontSize: 15,
+            }}>氢</div>
+            <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.3 }}>氢璞 AI</div>
+          </div>
+
+          <Button
+            type="primary" size="large" icon={<PlusOutlined />}
+            onClick={() => goChat()}
+            style={{
+              marginBottom: 24, height: 44, borderRadius: 10,
+              background: '#111', borderColor: '#111', fontWeight: 500,
+            }}
+            block
+          >新对话</Button>
+
+          <div style={{ fontSize: 12, color: '#9c9b96', padding: '0 10px', marginBottom: 6 }}>导航</div>
           <Menu
-            theme="dark"
-            mode="horizontal"
+            mode="inline"
             selectedKeys={[currentPage]}
-            onClick={({ key }) => key === 'logout' ? logout() : setCurrentPage(key)}
+            onClick={({ key }) => setCurrentPage(key as Page)}
+            style={{ background: 'transparent', border: 'none', flex: 1 }}
             items={[
               { key: 'home', icon: <HomeOutlined />, label: '首页' },
-              { key: 'documents', icon: <FileTextOutlined />, label: '文档管理' },
               { key: 'chat', icon: <MessageOutlined />, label: '智能问答' },
-              ...(auth.user?.is_admin ? [{ key: 'admin', label: '管理后台' }] : []),
-              { type: 'divider' as const },
-              { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+              { key: 'documents', icon: <FileTextOutlined />, label: '知识库' },
+              ...(isAdmin ? [{ key: 'admin', icon: <SettingOutlined />, label: '管理后台' }] : []),
             ]}
-            style={{ flex: 1, minWidth: 0 }}
           />
-        </Header>
 
-        <Content style={{ padding: '24px 24px' }}>
-          {currentPage === 'home' && <HomePage />}
-          {currentPage === 'documents' && <DocumentsPage />}
-          {currentPage === 'chat' && <ChatPage token={auth.token} />}
-          {currentPage === 'admin' && auth.user?.is_admin && <AdminPage token={auth.token} />}
-        </Content>
+          <div style={{
+            padding: 12, borderTop: '1px solid #ecece4',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: '#f0eee6', display: 'grid', placeItems: 'center',
+                color: '#111', fontWeight: 600,
+              }}>{(auth.user?.username || 'U')[0].toUpperCase()}</div>
+              <div style={{ fontSize: 13 }}>
+                <div style={{ fontWeight: 500 }}>{auth.user?.username}</div>
+                <div style={{ color: '#9c9b96', fontSize: 11 }}>
+                  {isAdmin ? '管理员' : '客户'}
+                </div>
+              </div>
+            </div>
+            <Button type="text" icon={<LogoutOutlined />} onClick={logout} title="退出" />
+          </div>
+        </div>
+      </Sider>
 
-        <Footer style={{ textAlign: 'center' }}>
-          氢璞 AI 智能助手 ©2026 - 浦发·IGNITE 未来能源黑客松
-        </Footer>
-      </Layout>
-    </ConfigProvider>
+      <Content style={{ background: '#fff' }}>
+        {currentPage === 'home' && <Home auth={auth} onStartChat={goChat} onOpenDocs={() => setCurrentPage('documents')} />}
+        {currentPage === 'chat' && <Chat auth={auth} preset={chatPreset} clearPreset={() => setChatPreset(undefined)} />}
+        {currentPage === 'documents' && <Documents auth={auth} isAdmin={isAdmin} />}
+        {currentPage === 'admin' && isAdmin && <Admin auth={auth} />}
+      </Content>
+    </Layout>
   );
 };
 

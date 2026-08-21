@@ -1,536 +1,421 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Card, Table, Button, Upload, message, Modal, Tag, Typography,
-  Empty, Descriptions, List, Space, Progress, Badge, Image as AntImage,
-  Spin, Alert, Tabs,
+  Button, Empty, Spin, Typography, Tabs, Tag, Table, Alert, App as AntApp,
+  Space, Image as AntImage,
 } from 'antd';
 import {
-  UploadOutlined, FilePdfOutlined, EyeOutlined, ReloadOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined,
-  ThunderboltOutlined, TableOutlined, UnorderedListOutlined,
-  PhoneOutlined, AppstoreOutlined,
+  UploadOutlined, FileTextOutlined, EyeOutlined,
+  RocketOutlined, AppstoreOutlined, PictureOutlined, TableOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
-import { documentApi, type DocumentInfo, type ClassifiedContent } from '../services/api';
 
 const { Title, Text, Paragraph } = Typography;
 
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+interface DocumentItem {
+  filename: string;
+  file_size: number;
+  parsed: boolean;
+  upload_time?: string;
+  analyzed?: boolean;
+  page_count?: number;
+  has_vector_index?: boolean;
+  chunk_count?: number;
+}
 
+interface ProductGroup {
+  category_name: string;
+  category_page: number;
+  en_name: string;
+  features: string[];
+  intro_products: { model: string; category: string; specs: Record<string, string>; page: number }[];
+  spec_products: { model: string; category: string; specs: Record<string, string>; page: number }[];
+  spec_page: number | null;
+}
 
+interface ProductImage {
+  page: number;
+  index: number;
+  width: number;
+  height: number;
+  description: string;
+  url: string;
+}
 
+interface TableBlock {
+  title: string;
+  headers: string[];
+  rows: string[][];
+  page: number;
+}
 
+interface ClassifiedContent {
+  product_groups?: ProductGroup[];
+  tables?: TableBlock[];
+  product_images?: ProductImage[];
+  contact_info?: { address?: string; phone?: string; website?: string; email?: string } | null;
+  summary?: { total_pages?: number; total_tokens?: number; total_images?: number };
+}
 
-const DocumentsPage: React.FC = () => {
-  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boolean }) {
+  const { message } = AntApp.useApp();
+  const token = auth?.token;
+  const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
-  const [detailModal, setDetailModal] = useState(false);
-  const [detailFilename, setDetailFilename] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
   const [classified, setClassified] = useState<ClassifiedContent | null>(null);
-  const [classifiedLoading, setClassifiedLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('groups');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchDocuments = useCallback(async () => {
+  const authHeaders = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const loadDocs = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const resp = await documentApi.list();
-      setDocuments(resp.documents || []);
-    } catch (err: any) {
-      message.error('获取文档列表失败: ' + err.message);
+      const res = await fetch(`${API}/api/v1/documents/list`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载列表失败');
+      const data = await res.json();
+      setDocs(data.documents || []);
+    } catch (e: any) {
+      message.error(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+  const loadClassified = async (filename: string) => {
+    try {
+      const res = await fetch(
+        `${API}/api/v1/documents/classified/${encodeURIComponent(filename)}`,
+        { headers: authHeaders },
+      );
+      if (!res.ok) throw new Error('加载分析结果失败');
+      const data: ClassifiedContent = await res.json();
+      setClassified(data);
+    } catch (e: any) {
+      message.error(e.message);
+      setClassified(null);
+    }
+  };
 
-  const handleUpload = async (file: File) => {
+  useEffect(() => {
+    loadDocs();
+  }, [token]);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      await documentApi.upload(file);
-      message.success(`${file.name} 上传成功`);
-      fetchDocuments();
-    } catch (err: any) {
-      message.error('上传失败: ' + err.message);
+      for (const file of Array.from(files)) {
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+          message.warning(`${file.name} 不是 PDF，已跳过`);
+          continue;
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API}/api/v1/documents/upload`, {
+          method: 'POST', body: formData, headers: authHeaders,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || '上传失败');
+        }
+        const data = await res.json();
+        message.success(`已上传 ${file.name}`);
+
+        // 自动触发解析
+        await fetch(`${API}/api/v1/documents/parse?filename=${encodeURIComponent(file.name)}&parse_mode=auto`, {
+          method: 'POST', headers: authHeaders,
+        });
+        message.success(`已解析 ${file.name}`);
+      }
+      await loadDocs();
+    } catch (e: any) {
+      message.error(e.message);
     } finally {
       setUploading(false);
     }
-    return false;
   };
 
   const handleAnalyze = async (filename: string) => {
     setAnalyzing(filename);
     try {
-      message.loading({ content: 'GPT-5.6 Luna 正在逐页分析...', key: 'analyze', duration: 0 });
-      const result = await documentApi.analyze(filename);
-      message.success({ content: `分析完成: ${result.total_pages} 页, ${result.total_tokens} tokens`, key: 'analyze' });
-      fetchDocuments();
-    } catch (err: any) {
-      message.error({ content: '分析失败: ' + err.message, key: 'analyze' });
-    } finally {
+      const res = await fetch(
+        `${API}/api/v1/documents/analyze/${encodeURIComponent(filename)}`,
+        { method: 'POST', headers: authHeaders },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || '启动分析失败');
+      }
+      message.success('已启动 AI 分析，请稍候');
+
+      // 轮询状态
+      const poll = setInterval(async () => {
+        try {
+          const sres = await fetch(
+            `${API}/api/v1/documents/analysis_status/${encodeURIComponent(filename)}`,
+            { headers: authHeaders },
+          );
+          const sd = await sres.json();
+          if (sd.status === 'completed' || sd.status === 'failed') {
+            clearInterval(poll);
+            setAnalyzing(null);
+            if (sd.status === 'completed') {
+              message.success('AI 分析完成');
+              await loadDocs();
+              if (selected === filename) await loadClassified(filename);
+            } else {
+              message.error('分析失败：' + (sd.error || ''));
+            }
+          }
+        } catch {
+          clearInterval(poll);
+          setAnalyzing(null);
+        }
+      }, 3000);
+    } catch (e: any) {
+      message.error(e.message);
       setAnalyzing(null);
     }
   };
 
-  const handleViewContent = async (filename: string) => {
-    setDetailFilename(filename);
-    setDetailModal(true);
-    setActiveTab('overview');
-    setClassified(null);
-    setClassifiedLoading(true);
+  const handleIndex = async (filename: string) => {
     try {
-      const result = await documentApi.getClassified(filename);
-      setClassified(result);
-    } catch (err: any) {
-      // If not analyzed yet, show prompt
-      message.warning('该文档尚未进行 GPT 分析，请先点击"AI分析"');
-    } finally {
-      setClassifiedLoading(false);
+      const res = await fetch(
+        `${API}/api/v1/rag/index/${encodeURIComponent(filename)}`,
+        { method: 'POST', headers: authHeaders },
+      );
+      if (!res.ok) throw new Error('索引失败');
+      message.success('已加入向量索引，可在问答中使用');
+      await loadDocs();
+    } catch (e: any) {
+      message.error(e.message);
     }
   };
 
-  const columns = [
-    {
-      title: '文件名', dataIndex: 'filename', key: 'filename',
-      render: (text: string) => (
-        <Space><FilePdfOutlined style={{ color: '#ff4d4f' }} /><Text copyable>{text}</Text></Space>
-      ),
-    },
-    {
-      title: '大小', dataIndex: 'file_size', key: 'file_size',
-      render: (s: number) => s < 1048576 ? `${(s/1024).toFixed(1)} KB` : `${(s/1048576).toFixed(2)} MB`,
-    },
-    {
-      title: '状态', dataIndex: 'parsed', key: 'parsed',
-      render: (p: boolean) => p ? <Tag icon={<CheckCircleOutlined />} color="success">已解析</Tag> : <Tag icon={<CloseCircleOutlined />}>未解析</Tag>,
-    },
-    {
-      title: '操作', key: 'action',
-      render: (_: any, r: DocumentInfo) => (
-        <Space>
-          <Button type="primary" size="small" icon={<ThunderboltOutlined />}
-            loading={analyzing === r.filename}
-            onClick={() => handleAnalyze(r.filename)}>
-            AI分析
-          </Button>
-          <Button size="small" icon={<EyeOutlined />}
-            onClick={() => handleViewContent(r.filename)}>
-            查看
-          </Button>
+  const openDoc = async (filename: string) => {
+    setSelected(filename);
+    setClassified(null);
+    await loadClassified(filename);
+  };
+
+  const formatBytes = (n: number) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(2)} MB`;
+  };
+
+  // 详情面板
+  if (selected && classified) {
+    const groups = classified.product_groups || [];
+    const tables = classified.tables || [];
+    const images = classified.product_images || [];
+
+    return (
+      <div style={{ padding: '32px 40px', maxWidth: 980, margin: '0 auto' }}>
+        <Space style={{ marginBottom: 18 }}>
+          <Button onClick={() => { setSelected(null); setClassified(null); }}>← 返回列表</Button>
+          <Title level={4} style={{ margin: 0 }}>{selected}</Title>
         </Space>
-      ),
-    },
-  ];
 
-  // ============ 渲染分类内容 ============
-
-  const renderOverview = () => {
-    if (!classified || !classified.product_groups) return <Empty description="无数据" />;
-    const summary = classified.summary || {};
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={16}>
-        <Descriptions bordered column={3} size="small">
-          <Descriptions.Item label="产品大类">{classified.product_groups.length}</Descriptions.Item>
-          <Descriptions.Item label="具体型号">{classified.product_groups.reduce((s, g) => s + g.spec_products.length, 0)}</Descriptions.Item>
-          <Descriptions.Item label="表格">{classified.tables?.length || 0}</Descriptions.Item>
-          <Descriptions.Item label="产品图片">{classified.product_images?.length || 0}</Descriptions.Item>
-          <Descriptions.Item label="Token消耗">{summary.total_tokens || 0}</Descriptions.Item>
-        </Descriptions>
-
-        {classified.contact_info && (
-          <Card size="small" title={<Space><PhoneOutlined /> 联系信息</Space>}>
-            <Descriptions column={1} size="small">
-              {classified.contact_info.address && <Descriptions.Item label="地址">{classified.contact_info.address}</Descriptions.Item>}
-              {classified.contact_info.phone && <Descriptions.Item label="电话">{classified.contact_info.phone}</Descriptions.Item>}
-              {classified.contact_info.website && <Descriptions.Item label="网址">{classified.contact_info.website}</Descriptions.Item>}
-              {classified.contact_info.email && <Descriptions.Item label="邮箱">{classified.contact_info.email}</Descriptions.Item>}
-            </Descriptions>
-          </Card>
-        )}
-
-        <Card size="small" title="产品大类总览">
-          <List size="small" dataSource={classified.product_groups} renderItem={(group) => (
-            <List.Item>
-              <Space>
-                <Tag color="blue">{group.category_name}</Tag>
-                <Text type="secondary">P{group.category_page}</Text>
-                {group.spec_page && <Text type="secondary">→ P{group.spec_page}</Text>}
-                <Badge count={group.spec_products.length} style={{ backgroundColor: '#1890ff' }} />
-              </Space>
-            </List.Item>
-          )} />
-        </Card>
-      </Space>
-    );
-  };
-
-  const renderProducts = () => {
-    if (!classified || !classified.product_groups || classified.product_groups.length === 0) return <Empty description="无产品参数" />;
-    
-    // 统计所有型号数
-    const totalModels = classified.product_groups.reduce((sum, g) => sum + g.spec_products.length, 0);
-    
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={24}>
-        <Alert message={`共 ${classified.product_groups.length} 个产品大类，${totalModels} 个具体型号`} type="info" showIcon />
-        {classified.product_groups.map((group, idx) => (
-          <Card
-            key={idx}
-            size="small"
-            title={
-              <Space>
-                <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{group.category_name}</Tag>
-                {group.en_name && <Text type="secondary" style={{ fontSize: 13 }}>{group.en_name}</Text>}
-                <Text type="secondary">P{group.category_page}</Text>
-                {group.spec_page && <Text type="secondary">参数页 P{group.spec_page}</Text>}
-                <Badge count={group.spec_products.length} />
-              </Space>
-            }
-          >
-            {/* 产品特点 */}
-            {group.features && group.features.length > 0 && (
-              <div style={{ marginBottom: 12, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
-                <Text strong style={{ color: '#52c41a' }}>产品特点</Text>
-                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {group.features.map((f, i) => (
-                    <Tag key={i} color="green" style={{ fontSize: 13, padding: '2px 10px' }}>{f}</Tag>
-                  ))}
-                </div>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24,
+        }}>
+          {[
+            { label: '产品大类', value: groups.length, icon: <AppstoreOutlined /> },
+            { label: '产品型号', value: groups.reduce((s, g) => s + g.intro_products.length + g.spec_products.length, 0), icon: <RocketOutlined /> },
+            { label: '表格', value: tables.length, icon: <TableOutlined /> },
+            { label: '产品图片', value: images.length, icon: <PictureOutlined /> },
+          ].map((s, i) => (
+            <div key={i} style={{
+              background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: '16px 18px',
+            }}>
+              <div style={{ fontSize: 12, color: '#9c9b96', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                {s.icon} {s.label}
               </div>
-            )}
-            
-            {/* 具体型号参数表 */}
-            {group.spec_products.length > 0 && (
-              <div>
-                <Text strong style={{ color: '#1890ff' }}>具体型号参数</Text>
-                {group.spec_products.map((p, i) => (
-                  <div key={i} style={{ marginTop: 8, padding: 12, background: '#fafafa', borderRadius: 8 }}>
-                    <Space style={{ marginBottom: 8 }}>
-                      <Tag color="blue" style={{ fontSize: 13 }}>{p.model}</Tag>
-                      {p.category && <Tag>{p.category}</Tag>}
-                    </Space>
-                    <Descriptions column={2} size="small" bordered>
-                      {Object.entries(p.specs || {}).map(([k, v]) => (
-                        <Descriptions.Item key={k} label={k}>{v}</Descriptions.Item>
-                      ))}
-                    </Descriptions>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {group.spec_products.length === 0 && group.intro_products.length === 0 && (
-              <Text type="secondary">（无详细参数）</Text>
-            )}
-          </Card>
-        ))}
-      </Space>
-    );
-  };
+              <div style={{ fontSize: 24, fontWeight: 600 }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
 
-  const renderTables = () => {
-    if (!classified || !classified.tables || classified.tables.length === 0) return <Empty description="无表格" />;
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={16}>
-        {classified.tables.map((table, idx) => (
-          <Card key={idx} size="small" title={`${table.title || '表格'} - 第${table.page}页`}>
-            <Table
-              size="small"
-              bordered
-              pagination={false}
-              dataSource={table.rows.map((row, i) => ({ key: i, ...Object.fromEntries(row.map((v, j) => [table.headers[j] || `col${j}`, v])) }))}
-              columns={table.headers.map((h, j) => ({ title: h, dataIndex: h || `col${j}`, key: h || `col${j}` }))}
-            />
-          </Card>
-        ))}
-      </Space>
-    );
-  };
-
-  const renderImages = () => {
-    if (!classified || !classified.product_images || classified.product_images.length === 0) return <Empty description="无产品图片" />;
-    
-    // 按 product_group 的介绍页配对图片
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={24}>
-        <Alert message={`共 ${classified.product_images.length} 张产品图片，点击可放大`} type="info" showIcon />
-        {(classified.product_groups || []).map((group) => {
-          // 找该大类的图片（介绍页上的图片）
-          const groupImgs = (classified.product_images || []).filter(img => img.page === group.category_page);
-          if (groupImgs.length === 0) return null;
-          
-          return (
-            <Card
-              key={group.category_page}
-              size="small"
-              title={
-                <Space>
-                  <Tag color="blue" style={{ fontSize: 14 }}>{group.category_name}</Tag>
-                  <Text type="secondary">P{group.category_page}</Text>
-                </Space>
-              }
-            >
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                {groupImgs.map((img) => (
-                  <div key={img.index} style={{ width: 300 }}>
-                    <AntImage
-                      src={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${encodeURI(img.url)}?t=${Date.now()}`}
-                      alt={img.description || `P${img.page}图${img.index}`}
-                      style={{ width: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }}
-                      placeholder={
-                        <div style={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: 8 }}>
-                          <Spin size="large" />
-                        </div>
-                      }
-                    />
-                    {img.description && (
-                      <Paragraph style={{ marginTop: 8, marginBottom: 0, fontSize: 12, color: '#666' }}>
-                        {img.description}
-                      </Paragraph>
+        <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
+          {
+            key: 'groups', label: '产品大类',
+            children: groups.length === 0 ? <Empty description="暂无产品大类" /> : (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                {groups.map((g, i) => (
+                  <div key={i} style={{
+                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 20,
+                  }}>
+                    <Title level={5} style={{ marginTop: 0, marginBottom: 4 }}>{g.category_name}</Title>
+                    {g.en_name && <Text type="secondary" style={{ fontSize: 12 }}>{g.en_name}</Text>}
+                    {g.features.length > 0 && (
+                      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {g.features.map((f, j) => <Tag key={j} color="default" style={{ borderRadius: 6 }}>{f}</Tag>)}
+                      </div>
+                    )}
+                    {g.spec_products.length > 0 && (
+                      <div style={{ marginTop: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>产品参数</div>
+                        <Table
+                          size="small"
+                          pagination={false}
+                          dataSource={g.spec_products.map((p, j) => ({ key: j, model: p.model, ...p.specs }))}
+                          columns={[
+                            { title: '型号', dataIndex: 'model', key: 'model', width: 140, fixed: 'left' },
+                            ...Object.keys(g.spec_products[0]?.specs || {}).map((k) => ({
+                              title: k, dataIndex: k, key: k, ellipsis: true,
+                            })),
+                          ]}
+                          scroll={{ x: 'max-content' }}
+                        />
+                      </div>
                     )}
                   </div>
                 ))}
-              </div>
-            </Card>
-          );
-        })}
-      </Space>
-    );
-  };
-
-  // ============ 宣传册渲染 ============
-
-  const renderBrochureOverview = () => {
-    if (!classified?.sections) return <Empty description="无数据" />;
-    const summary = classified.summary || {};
-    const imgStats = summary.image_type_stats || {};
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={16}>
-        <Descriptions bordered column={3} size="small">
-          <Descriptions.Item label="总页数">{summary.total_pages}</Descriptions.Item>
-          <Descriptions.Item label="内容板块">{classified.sections.length}</Descriptions.Item>
-          <Descriptions.Item label="表格">{classified.tables?.length || 0}</Descriptions.Item>
-          <Descriptions.Item label="图片总数">{summary.total_images || 0}</Descriptions.Item>
-          <Descriptions.Item label="Token消耗">{summary.total_tokens}</Descriptions.Item>
-        </Descriptions>
-
-        {imgStats && Object.keys(imgStats).length > 0 && (
-          <Card size="small" title="图片类型分布">
-            <Space wrap>
-              {Object.entries(imgStats).map(([type, count]) => (
-                <Tag key={type} color="blue" style={{ fontSize: 13 }}>{type}: {count}</Tag>
-              ))}
-            </Space>
-          </Card>
-        )}
-
-        {classified.contact_info && (
-          <Card size="small" title={<Space><PhoneOutlined /> 联系信息</Space>}>
-            <Descriptions column={1} size="small">
-              {classified.contact_info.address && <Descriptions.Item label="地址">{classified.contact_info.address}</Descriptions.Item>}
-              {classified.contact_info.phone && <Descriptions.Item label="电话">{classified.contact_info.phone}</Descriptions.Item>}
-              {classified.contact_info.website && <Descriptions.Item label="网址">{classified.contact_info.website}</Descriptions.Item>}
-              {classified.contact_info.email && <Descriptions.Item label="邮箱">{classified.contact_info.email}</Descriptions.Item>}
-            </Descriptions>
-          </Card>
-        )}
-
-        <Card size="small" title="内容概览">
-          <List size="small" dataSource={classified.sections} renderItem={(sec) => (
-            <List.Item>
-              <Space>
-                <Tag color={sec.page_type === 'cover' ? 'gold' : sec.page_type === 'solution' ? 'green' : 'blue'}>
-                  {sec.page_type_label}
-                </Tag>
-                <Text strong>{sec.title}</Text>
-                <Text type="secondary">P{sec.page_num}</Text>
-                <Tag>文段 {sec.subsections.length}</Tag>
-                {sec.list_items.length > 0 && <Tag color="cyan">列表 {sec.list_items.length}</Tag>}
-                {sec.image_count > 0 && <Tag color="purple">图片 {sec.image_count}</Tag>}
               </Space>
-            </List.Item>
-          )} />
-        </Card>
-      </Space>
+            ),
+          },
+          {
+            key: 'tables', label: '表格',
+            children: tables.length === 0 ? <Empty description="暂无表格" /> : (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                {tables.map((t, i) => (
+                  <div key={i} style={{
+                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 20,
+                  }}>
+                    <div style={{ marginBottom: 10, fontWeight: 500 }}>{t.title || `表格 (P${t.page})`}</div>
+                    <Table
+                      size="small" pagination={false}
+                      dataSource={t.rows.map((r, j) => ({ key: j, ...Object.fromEntries(r.map((v, k) => [t.headers[k] || `col${k}`, v])) }))}
+                      columns={t.headers.map((h, j) => ({ title: h, dataIndex: h || `col${j}`, key: h || `col${j}` }))}
+                      scroll={{ x: 'max-content' }}
+                    />
+                  </div>
+                ))}
+              </Space>
+            ),
+          },
+          {
+            key: 'images', label: '产品图片',
+            children: images.length === 0 ? <Empty description="暂无产品图片" /> : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {images.map((img, i) => (
+                  <div key={i} style={{
+                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12,
+                    padding: 12,
+                  }}>
+                    <AntImage
+                      src={`${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
+                      alt={img.description}
+                      style={{ width: '100%', borderRadius: 8 }}
+                    />
+                    <Paragraph style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: '#5f5e5a' }} ellipsis={{ rows: 3 }}>
+                      {img.description || '产品图片'}
+                    </Paragraph>
+                    <div style={{ fontSize: 11, color: '#9c9b96', marginTop: 4 }}>P{img.page} · {img.width}×{img.height}</div>
+                  </div>
+                ))}
+              </div>
+            ),
+          },
+        ]} />
+      </div>
     );
-  };
+  }
 
-  const renderBrochureSections = () => {
-    if (!classified?.sections) return <Empty description="无数据" />;
-    const imgTypeColors: Record<string, string> = { product_image: 'blue', chart: 'purple', flowchart: 'cyan', map: 'green', other: 'default' };
-    const imgTypeIcons: Record<string, string> = { product_image: '🚛', chart: '📊', flowchart: '🔄', map: '🗺️', other: '🖼️' };
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size={24}>
-        <Alert message={`共 ${classified.sections.length} 个内容板块`} type="info" showIcon />
-        {classified.sections.map((sec) => {
-          const hasContent = sec.subsections.length > 0 || sec.list_items.length > 0;
-          const hasImages = sec.image_count > 0;
-          if (!hasContent && !hasImages) return null;
-          return (
-            <Card key={sec.page_num} size="small"
-              title={
-                <Space>
-                  <Tag color={sec.page_type === 'cover' ? 'gold' : sec.page_type === 'solution' ? 'green' : 'blue'}>{sec.page_type_label}</Tag>
-                  <Text strong style={{ fontSize: 15 }}>{sec.title}</Text>
-                  <Text type="secondary">P{sec.page_num}</Text>
-                </Space>
-              }
-            >
-              {sec.subsections.length > 0 && (
-                <div style={{ marginBottom: sec.list_items.length > 0 || hasImages ? 16 : 0 }}>
-                  {sec.subsections.map((sub: any, i: number) => (
-                    <div key={i} style={{ marginBottom: 6 }}>
-                      {sub.type === 'heading' ? (
-                        <Text strong style={{ fontSize: 14, color: '#1890ff' }}>▸ {sub.content}</Text>
-                      ) : sub.type === 'caption' ? (
-                        <Tag style={{ fontSize: 13, margin: 2 }}>{sub.content}</Tag>
-                      ) : (
-                        <Paragraph style={{ marginBottom: 4, marginLeft: 16, color: '#333' }}>{sub.content}</Paragraph>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {sec.list_items.length > 0 && (
-                <div style={{ marginBottom: hasImages ? 16 : 0, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
-                  <Text strong style={{ color: '#52c41a' }}>◆ 列表内容</Text>
-                  <div style={{ marginTop: 8 }}>
-                    {sec.list_items.map((li, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 4 }}>
-                        <Tag color="green" style={{ minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{i + 1}</Tag>
-                        <Text style={{ flex: 1 }}>{li}</Text>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {hasImages && Object.entries(sec.images_by_type).map(([itype, imgs]) => (
-                <div key={itype} style={{ marginBottom: 16 }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <Tag color={imgTypeColors[itype] || 'default'} style={{ fontSize: 13 }}>
-                      {imgTypeIcons[itype] || '🖼️'} {imgs[0]?.type_label || itype} ({imgs.length})
-                    </Tag>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {imgs.map((img: any, i: number) => (
-                      <div key={i} style={{ width: img.has_file ? 280 : 300 }}>
-                        {img.has_file && img.url ? (
-                          <AntImage
-                            src={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${encodeURI(img.url)}?t=${Date.now()}`}
-                            alt={img.description || `P${img.page}图${i}`}
-                            style={{ width: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }}
-                            placeholder={<div style={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: 8 }}><Spin size="large" /></div>}
-                          />
-                        ) : (
-                          <div style={{ width: '100%', minHeight: 60, padding: '12px 14px', background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                            <Space align="start">
-                              <Text style={{ fontSize: 20 }}>{imgTypeIcons[itype] || '🖼️'}</Text>
-                              <Text style={{ fontSize: 13, color: '#666' }}>{img.description}</Text>
-                            </Space>
-                          </div>
-                        )}
-                        {img.description && (
-                          <Paragraph style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: '#666' }}>{img.description}</Paragraph>
-                        )}
-                        {(img as any).ai_description && (
-                          <Paragraph style={{ marginTop: 8, marginBottom: 0, fontSize: 12, color: '#1677ff', background: '#f0f7ff', padding: '8px 12px', borderRadius: 6, borderLeft: '3px solid #1677ff' }}>
-                            <Text style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>🤖 AI 产品描述</Text>
-                            <Text style={{ fontSize: 12, color: '#333' }}>{(img as any).ai_description}</Text>
-                          </Paragraph>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </Card>
-          );
-        })}
-      </Space>
-    );
-  };
-
-  // ============ Tab 配置 ============
-  const tabItems = classified ? (classified.doc_type === 'brochure' ? [
-    { key: 'overview', label: <Space><AppstoreOutlined /> 概览</Space>, children: renderBrochureOverview() },
-    { key: 'sections', label: <Space><UnorderedListOutlined /> 内容板块 ({classified.sections?.length || 0})</Space>, children: renderBrochureSections() },
-    { key: 'tables', label: <Space><TableOutlined /> 表格 ({classified.tables?.length || 0})</Space>, children: renderTables() },
-  ] : [
-    { key: 'overview', label: <Space><AppstoreOutlined /> 概览</Space>, children: renderOverview() },
-    { key: 'products', label: <Space><ThunderboltOutlined /> 产品参数 ({classified.product_groups?.reduce((s, g) => s + g.spec_products.length, 0) || 0})</Space>, children: renderProducts() },
-    { key: 'tables', label: <Space><TableOutlined /> 表格 ({classified.tables?.length || 0})</Space>, children: renderTables() },
-    { key: 'images', label: <Space><FilePdfOutlined /> 产品图片 ({classified.product_images?.length || 0})</Space>, children: renderImages() },
-  ]) : [];
-
+  // 列表面板
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <Card
-        title={<Title level={4}>📄 文档管理</Title>}
-        extra={
-          <Space>
-            <Upload accept=".pdf" showUploadList={false} beforeUpload={handleUpload}>
-              <Button icon={<UploadOutlined />} loading={uploading}>上传 PDF</Button>
-            </Upload>
-            <Button icon={<ReloadOutlined />} onClick={fetchDocuments} loading={loading}>刷新</Button>
-          </Space>
-        }
+    <div style={{ padding: '32px 40px', maxWidth: 1080, margin: '0 auto' }}>
+      <Title level={3} style={{ marginTop: 0, fontWeight: 600, letterSpacing: -0.5 }}>
+        企业知识库
+      </Title>
+      <Paragraph type="secondary" style={{ marginBottom: 28 }}>
+        上传氢璞资料，AI 自动解析、视觉分析与向量化索引。
+      </Paragraph>
+
+      {/* 上传区 */}
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+        style={{
+          border: `2px dashed ${dragOver ? '#111' : '#ecece4'}`,
+          borderRadius: 14, padding: '36px 24px',
+          textAlign: 'center', cursor: 'pointer',
+          background: dragOver ? '#f0eee6' : '#fff',
+          transition: 'all 0.15s', marginBottom: 24,
+        }}
       >
-        {analyzing && (
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space><LoadingOutlined spin /><Text>GPT-5.6 Luna 正在分析: {analyzing}</Text></Space>
-              <Progress percent={95} status="active" />
-              <Text type="secondary">逐页视觉识别中，18页约需3-5分钟...</Text>
-            </Space>
-          </Card>
-        )}
-
-        <Alert
-          style={{ marginBottom: 16 }}
-          message="使用 GPT-5.6 Luna 多模态视觉模型分析 PDF"
-          description="点击「AI分析」按钮，Luna 将逐页识别产品参数、表格、图片类型，替代 MinerU OCR。"
-          type="info"
-          showIcon
+        <UploadOutlined style={{ fontSize: 28, color: '#9c9b96', marginBottom: 10 }} />
+        <div style={{ fontWeight: 500, marginBottom: 4 }}>点击或拖拽 PDF 文件到此处</div>
+        <Text type="secondary" style={{ fontSize: 13 }}>上传后自动触发解析与视觉分析</Text>
+        <input
+          ref={fileInputRef} type="file" multiple accept=".pdf"
+          style={{ display: 'none' }}
+          onChange={(e) => handleFiles(e.target.files)}
         />
+      </div>
 
-        <Table
-          columns={columns}
-          dataSource={documents}
-          rowKey="filename"
-          loading={loading}
-          pagination={false}
-        />
-      </Card>
+      {uploading && <Alert message="正在上传并解析..." type="info" showIcon style={{ marginBottom: 16 }} />}
 
-      {/* 内容浏览弹窗 */}
-      <Modal
-        title={`内容浏览: ${detailFilename}`}
-        open={detailModal}
-        onCancel={() => { setDetailModal(false); setClassified(null); }}
-        footer={null}
-        width={1100}
-        styles={{ body: { maxHeight: '75vh', overflow: 'auto' } }}
-      >
-        {classifiedLoading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
-            <Spin size="large" />
-            <Paragraph style={{ marginTop: 16 }}>正在加载分析结果...</Paragraph>
-          </div>
-        ) : classified ? (
-          <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
-        ) : (
-          <Empty description="请先点击「AI分析」按钮进行分析" >
-            <Button type="primary" icon={<ThunderboltOutlined />}
-              loading={analyzing === detailFilename}
-              onClick={() => handleAnalyze(detailFilename)}>
-              开始 AI 分析
-            </Button>
-          </Empty>
-        )}
-      </Modal>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60 }}><Spin /></div>
+      ) : docs.length === 0 ? (
+        <Empty description="暂无文档，请先上传" />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {docs.map((d) => (
+            <div key={d.filename} style={{
+              background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 18,
+              display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <FileTextOutlined style={{ color: '#5f5e5a', fontSize: 20, marginTop: 2 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontWeight: 500, fontSize: 14,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{d.filename}</div>
+                  <div style={{ fontSize: 12, color: '#9c9b96' }}>{formatBytes(d.file_size)}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {d.parsed && <Tag color="default" style={{ borderRadius: 6 }}>已解析</Tag>}
+                {d.analyzed && <Tag color="green" style={{ borderRadius: 6 }}>AI 分析</Tag>}
+                {d.has_vector_index && <Tag color="blue" style={{ borderRadius: 6 }}>向量索引</Tag>}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                <Button
+                  size="small" icon={<EyeOutlined />}
+                  onClick={() => openDoc(d.filename)}
+                  disabled={!d.analyzed}
+                >查看</Button>
+                <Button
+                  size="small" icon={<RocketOutlined />}
+                  loading={analyzing === d.filename}
+                  onClick={() => handleAnalyze(d.filename)}
+                  disabled={!d.parsed}
+                >{d.analyzed ? '重新分析' : 'AI 分析'}</Button>
+                <Button
+                  size="small" icon={<ApartmentOutlined />}
+                  onClick={() => handleIndex(d.filename)}
+                  disabled={!d.analyzed}
+                >索引</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-};
-
-export default DocumentsPage;
+}

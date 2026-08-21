@@ -1,19 +1,313 @@
-import { useEffect, useState } from 'react';
-import { Card, Col, Row, Statistic, Table, Tabs, Tag, Button, Drawer, List, message } from 'antd';
-import ChatPage from './Chat';
-import DocumentsPage from './Documents';
-const API=process.env.REACT_APP_API_URL||'http://localhost:8000';
-const req=async(token:string,path:string)=>{const r=await fetch(API+path,{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw Error(d.detail||'请求失败');return d};
-export default function AdminPage({token}:{token:string}){
- const [overview,setOverview]=useState<any>({}),[users,setUsers]=useState<any[]>([]),[leads,setLeads]=useState<any[]>([]),[detail,setDetail]=useState<any[]>([]),[open,setOpen]=useState(false);
- const load=async()=>{try{const [o,u,l]=await Promise.all([req(token,'/api/v1/admin/overview'),req(token,'/api/v1/admin/users'),req(token,'/api/v1/admin/leads')]);setOverview(o);setUsers(u.users);setLeads(l.leads)}catch(e:any){message.error(e.message)}};
- useEffect(()=>{load()},[token]);
- const show=async(id:string)=>{try{const d=await req(token,'/api/v1/admin/sessions/'+id);setDetail(d.messages);setOpen(true)}catch(e:any){message.error(e.message)}};
- const download=async(id:string)=>{try{const r=await fetch(API+'/api/v1/admin/leads/'+id+'/sales-plan.docx',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error('生成方案失败');const a=document.createElement('a');a.href=URL.createObjectURL(await r.blob());a.download='客户销售沟通方案.docx';a.click();URL.revokeObjectURL(a.href)}catch(e:any){message.error(e.message)}};
- const tabs=[
-  {key:'dash',label:'数据看板',children:<><Row gutter={16}>{[['用户数',overview.users],['会话数',overview.sessions],['消息数',overview.messages]].map((x:any)=><Col span={8} key={x[0]}><Card><Statistic title={x[0]} value={x[1]||0}/></Card></Col>)}</Row><Card title="意向分布" style={{marginTop:16}}><List dataSource={overview.lead_distribution||[]} renderItem={(x:any)=><List.Item><Tag color={x.lead_level==='high'?'red':x.lead_level==='medium'?'orange':'default'}>{x.lead_level}</Tag>{x.count} 个会话</List.Item>}/></Card></>},
-  {key:'users',label:'用户管理',children:<Table rowKey="id" dataSource={users} columns={[{title:'用户名',dataIndex:'username'},{title:'邮箱',dataIndex:'email'},{title:'身份',dataIndex:'user_type',render:(x:string)=><Tag>{x==='admin'?'管理用户':'客户'}</Tag>},{title:'状态',dataIndex:'is_active',render:(x:boolean)=>x?'正常':'停用'}]}/>},
-  {key:'leads',label:'客户线索',children:<Table rowKey="id" dataSource={leads} columns={[{title:'客户',dataIndex:'username'},{title:'会话',dataIndex:'session_name'},{title:'分数',dataIndex:'lead_score'},{title:'等级',dataIndex:'lead_level',render:(x:string)=><Tag color={x==='high'?'red':x==='medium'?'orange':'default'}>{x}</Tag>},{title:'操作',render:(_:any,r:any)=><><Button onClick={()=>show(r.id)}>查看对话</Button><Button style={{marginLeft:8}} onClick={()=>download(r.id)}>销售方案</Button></>}]}/>},
-  {key:'docs',label:'知识库管理',children:<DocumentsPage/>}, {key:'ai',label:'管理 AI 助手',children:<ChatPage token={token}/>}];
- return <><Tabs items={tabs}/><Drawer title="对话记录" width={640} open={open} onClose={()=>setOpen(false)}><List dataSource={detail} renderItem={(x:any)=><List.Item><b>{x.role==='user'?'客户':'AI'}：</b>{x.content}</List.Item>}/></Drawer></>;
+import React, { useState, useEffect } from 'react';
+import {
+  Typography, Tabs, Table, Tag, Space, Button, Drawer, Spin, App as AntApp,
+  Empty, Statistic, Card, Descriptions,
+} from 'antd';
+import {
+  UserOutlined, MessageOutlined, ThunderboltOutlined, FileTextOutlined,
+  DownloadOutlined, EyeOutlined,
+} from '@ant-design/icons';
+
+const { Title, Text } = Typography;
+
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+interface Overview {
+  users: number;
+  sessions: number;
+  messages: number;
+  leads?: number;
+  lead_distribution?: { lead_level: string; count: number }[];
+  role_distribution?: { assistant_role: string; count: number }[];
+  recent_sessions?: any[];
+}
+
+interface UserItem {
+  id: number;
+  username: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface LeadItem {
+  id: number;
+  username: string;
+  email?: string;
+  session_name?: string;
+  lead_score: number;
+  lead_level: string;
+  lead_signals?: Record<string, any>;
+  updated_at?: string;
+}
+
+export default function Admin({ auth }: { auth: any }) {
+  const { message } = AntApp.useApp();
+  const token = auth?.token;
+  const authHeaders = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const [activeTab, setActiveTab] = useState('overview');
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [drawer, setDrawer] = useState<{ lead: LeadItem; messages: any[] } | null>(null);
+
+  useEffect(() => {
+    if (activeTab === 'overview') loadOverview();
+    if (activeTab === 'users') loadUsers();
+    if (activeTab === 'leads') loadLeads();
+  }, [activeTab]);
+
+  const loadOverview = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/v1/admin/overview`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载看板失败');
+      setOverview(await res.json());
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/v1/admin/users`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载用户失败');
+      const data = await res.json();
+      setUsers(data.users || []);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLeads = async () => {
+    setLeadsLoading(true);
+    try {
+      const res = await fetch(`${API}/api/v1/admin/leads`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载线索失败');
+      const data = await res.json();
+      setLeads(data.leads || []);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  const openLeadDetail = async (lead: LeadItem) => {
+    try {
+      const res = await fetch(`${API}/api/v1/admin/sessions/${lead.id}`, { headers: authHeaders });
+      if (!res.ok) throw new Error('加载对话失败');
+      const data = await res.json();
+      setDrawer({ lead, messages: data.messages || [] });
+    } catch (e: any) {
+      message.error(e.message);
+    }
+  };
+
+  const downloadProposal = async (lead: LeadItem) => {
+    try {
+      const res = await fetch(`${API}/api/v1/admin/leads/${lead.id}/sales-plan.docx`, { headers: authHeaders });
+      if (!res.ok) throw new Error('生成失败');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_proposal_${lead.username}_${Date.now()}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success('销售方案已下载');
+    } catch (e: any) {
+      message.error(e.message);
+    }
+  };
+
+  const gradeColor = (g: string) => {
+    if (g === 'A') return 'green';
+    if (g === 'B') return 'blue';
+    if (g === 'C') return 'orange';
+    return 'default';
+  };
+
+  return (
+    <div style={{ padding: '32px 40px', maxWidth: 1180, margin: '0 auto' }}>
+      <Title level={3} style={{ marginTop: 0, fontWeight: 600, letterSpacing: -0.5 }}>
+        管理后台
+      </Title>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+        用户、会话与销售线索的集中管理。
+      </Text>
+
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'overview', label: '数据看板',
+            children: loading ? <Spin /> : overview ? (
+              <div>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28,
+                }}>
+                  {[
+                    { title: '用户数', value: overview.users, icon: <UserOutlined /> },
+                    { title: '会话数', value: overview.sessions, icon: <MessageOutlined /> },
+                    { title: '消息数', value: overview.messages, icon: <ThunderboltOutlined /> },
+                    { title: '线索数', value: overview.leads, icon: <FileTextOutlined /> },
+                  ].map((s, i) => (
+                    <div key={i} style={{
+                      background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: '18px 22px',
+                    }}>
+                      <div style={{ fontSize: 12, color: '#9c9b96', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        {s.icon} {s.title}
+                      </div>
+                      <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: -0.5 }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div style={{ background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 22 }}>
+                    <div style={{ fontWeight: 500, marginBottom: 14 }}>意向等级分布</div>
+                    {overview.lead_distribution && overview.lead_distribution.length > 0 ? (
+                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        {overview.lead_distribution.map((item) => (
+                          <div key={item.lead_level} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span><Tag color={gradeColor(item.lead_level)}>{item.lead_level} 级</Tag></span>
+                            <span style={{ fontWeight: 500 }}>{item.count}</span>
+                          </div>
+                        ))}
+                      </Space>
+                    ) : <Empty />}
+                  </div>
+
+                  <div style={{ background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 22 }}>
+                    <div style={{ fontWeight: 500, marginBottom: 14 }}>角色分布</div>
+                    {overview.role_distribution && overview.role_distribution.length > 0 ? (
+                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        {overview.role_distribution.map((item) => (
+                          <div key={item.assistant_role} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{item.assistant_role === 'sales' ? '销售' : item.assistant_role === 'customer_service' ? '客服' : '技术'}</span>
+                            <span style={{ fontWeight: 500 }}>{item.count}</span>
+                          </div>
+                        ))}
+                      </Space>
+                    ) : <Empty />}
+                  </div>
+                </div>
+              </div>
+            ) : <Empty />,
+          },
+          {
+            key: 'users', label: '用户',
+            children: (
+              <Table
+                loading={loading}
+                dataSource={users.map((u) => ({ ...u, key: u.id }))}
+                pagination={{ pageSize: 10 }}
+                columns={[
+                  { title: '用户名', dataIndex: 'username', key: 'username' },
+                  { title: '邮箱', dataIndex: 'email', key: 'email' },
+                  {
+                    title: '身份', dataIndex: 'is_admin', key: 'role',
+                    render: (v) => <Tag color={v ? 'purple' : 'default'}>{v ? '管理员' : '客户'}</Tag>,
+                  },
+                  {
+                    title: '状态', dataIndex: 'is_active', key: 'active',
+                    render: (v) => <Tag color={v ? 'green' : 'red'}>{v ? '正常' : '禁用'}</Tag>,
+                  },
+                  {
+                    title: '注册时间', dataIndex: 'created_at', key: 'created',
+                    render: (v) => new Date(v).toLocaleString('zh-CN'),
+                  },
+                ]}
+              />
+            ),
+          },
+          {
+            key: 'leads', label: '销售线索',
+            children: leadsLoading ? <Spin /> : (
+              <Table
+                dataSource={leads.map((l) => ({ ...l, key: l.id }))}
+                pagination={{ pageSize: 10 }}
+                columns={[
+                  { title: '客户', dataIndex: 'username', key: 'username' },
+                  {
+                    title: '意向度', dataIndex: 'lead_score', key: 'lead_score',
+                    render: (s) => <strong>{s}</strong>,
+                  },
+                  {
+                    title: '等级', dataIndex: 'lead_level', key: 'lead_level',
+                    render: (g) => <Tag color={gradeColor(g)}>{g} 级</Tag>,
+                  },
+                  {
+                    title: '信号', dataIndex: 'lead_signals', key: 'lead_signals',
+                    render: (signals: Record<string, any>) => {
+                      const keys = signals ? Object.keys(signals) : [];
+                      return (
+                        <Space size={4} wrap>
+                          {keys.slice(0, 2).map((k, i) => <Tag key={i}>{k}</Tag>)}
+                          {keys.length > 2 && <Tag>+{keys.length - 2}</Tag>}
+                        </Space>
+                      );
+                    },
+                  },
+                  {
+                    title: '操作', key: 'op',
+                    render: (_, l: LeadItem) => (
+                      <Space>
+                        <Button size="small" icon={<EyeOutlined />} onClick={() => openLeadDetail(l)}>查看</Button>
+                        <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadProposal(l)}>方案</Button>
+                      </Space>
+                    ),
+                  },
+                ]}
+              />
+            ),
+          },
+        ]}
+      />
+
+      <Drawer
+        title={`线索详情 · ${drawer?.lead.username || ''}`}
+        placement="right" width={560}
+        open={!!drawer} onClose={() => setDrawer(null)}
+      >
+        {drawer && (
+          <div>
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: 20 }}>
+              <Descriptions.Item label="意向度">{drawer.lead.lead_score}</Descriptions.Item>
+              <Descriptions.Item label="等级"><Tag color={gradeColor(drawer.lead.lead_level)}>{drawer.lead.lead_level} 级</Tag></Descriptions.Item>
+              <Descriptions.Item label="会话">{drawer.lead.session_name || drawer.lead.id}</Descriptions.Item>
+            </Descriptions>
+
+            <div style={{ fontWeight: 500, marginBottom: 12 }}>最近对话</div>
+            {drawer.messages.length === 0 ? <Empty /> : (
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                {drawer.messages.map((m, i) => (
+                  <div key={i} style={{
+                    background: m.role === 'user' ? '#f0eee6' : '#fff',
+                    border: '1px solid #ecece4', borderRadius: 10,
+                    padding: '10px 14px', fontSize: 13,
+                  }}>
+                    <div style={{ fontSize: 11, color: '#9c9b96', marginBottom: 4 }}>
+                      {m.role === 'user' ? '客户' : '氢璞 AI'} · {new Date(m.created_at).toLocaleString('zh-CN')}
+                    </div>
+                    <div style={{ lineHeight: 1.6 }}>{m.content}</div>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </div>
+        )}
+      </Drawer>
+    </div>
+  );
 }
