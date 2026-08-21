@@ -112,7 +112,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
         effective_query = f"{request.context_query} {request.query}"
     
     # 检测产品列表类查询
-    product_list_keywords = ("产品有哪些", "有哪些产品", "所有产品", "产品列表", "产品型号", "全部产品", "产品介绍")
+    product_list_keywords = ("产品有哪些", "有哪些产品", "所有产品", "产品列表", "产品型号", "全部产品", "产品介绍", "介绍.*产品", "你们的产品", "公司产品")
     is_product_list_query = any(kw in request.query for kw in product_list_keywords)
     logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
     
@@ -172,9 +172,9 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
         # 从所有检索结果中提取产品型号
         product_models = set()
         for r in results:
-            text = r.get("text", "")
+            chunk_text = r.get("text", "")
             # 提取型号（ST开头或CESP开头）
-            models = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+)\b', text)
+            models = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+)\b', chunk_text)
             product_models.update(models)
         
         # 按类型分组
