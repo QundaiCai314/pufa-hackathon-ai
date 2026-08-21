@@ -189,6 +189,17 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     return Array.from(models).slice(0, 6);
   };
 
+  const handleRiskCheck = () => {
+    if (!Object.keys(profile).length) {
+      message.warning('请先通过智能选型填写项目需求');
+      setSelectionOpen(true);
+      return;
+    }
+    setRole('technical_support');
+    const profileText = Object.entries(profile).map(([k, v]) => `${k}=${v}`).join('；');
+    handleSend(`请审查以下项目需求的技术风险和缺失条件：${profileText}。请按“已满足条件、潜在风险、必须确认的信息、建议下一步”输出。只依据企业资料，不能编造参数或安全结论。`);
+  };
+
   const handleCompareSubmit = () => {
     if (compareModels.length < 2) {
       message.warning('请至少选择两款产品进行对比');
@@ -370,9 +381,14 @@ ${query}`
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#7c5d15' }}>当前项目需求画像</span>
-            <Button type="text" size="small" onClick={() => setProfile({})} style={{ fontSize: 11, color: '#a18a52', padding: 0 }}>
-              清除
-            </Button>
+            <Space size={10}>
+              <Button type="text" size="small" onClick={handleRiskCheck} style={{ fontSize: 11, color: '#8a6511', padding: 0 }}>
+                风险检查
+              </Button>
+              <Button type="text" size="small" onClick={() => setProfile({})} style={{ fontSize: 11, color: '#a18a52', padding: 0 }}>
+                清除
+              </Button>
+            </Space>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {Object.entries(profile).map(([key, value]) => (
