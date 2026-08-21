@@ -35,6 +35,15 @@ interface UserItem {
   created_at: string;
 }
 
+interface ActionItem {
+  session_id: string;
+  project: string;
+  customer: string;
+  health: number;
+  priority: string;
+  action: string;
+}
+
 interface HealthProject {
   session_id: string;
   project: string;
@@ -66,6 +75,7 @@ export default function Admin({ auth }: { auth: any }) {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [healthProjects, setHealthProjects] = useState<HealthProject[]>([]);
+  const [actionQueue, setActionQueue] = useState<ActionItem[]>([]);
   const [selectedHealth, setSelectedHealth] = useState<HealthProject | null>(null);
   const [loading, setLoading] = useState(false);
   const [leadsLoading, setLeadsLoading] = useState(false);
@@ -112,6 +122,7 @@ export default function Admin({ auth }: { auth: any }) {
       if (!res.ok) throw new Error('加载项目健康度失败');
       const data = await res.json();
       setHealthProjects(data.projects || []);
+      setActionQueue(data.action_queue || []);
       setSelectedHealth(data.projects?.[0] || null);
     } catch (e: any) { message.error(e.message); }
     finally { setLoading(false); }
@@ -238,6 +249,13 @@ export default function Admin({ auth }: { auth: any }) {
           {
             key: 'health', label: '项目健康度',
             children: loading ? <Spin /> : healthProjects.length === 0 ? <Empty description="尚无已保存方案的项目数据" /> : (
+              <div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12, marginBottom:18 }}>
+                  <div style={{border:'1px solid #ecece4',borderRadius:10,padding:'14px 16px'}}><div style={{fontSize:12,color:'#888'}}>项目总数</div><b style={{fontSize:24}}>{healthProjects.length}</b></div>
+                  <div style={{border:'1px solid #ecece4',borderRadius:10,padding:'14px 16px'}}><div style={{fontSize:12,color:'#888'}}>需优先处理</div><b style={{fontSize:24,color:'#a8071a'}}>{actionQueue.filter(x=>x.priority==='高').length}</b></div>
+                  <div style={{border:'1px solid #ecece4',borderRadius:10,padding:'14px 16px'}}><div style={{fontSize:12,color:'#888'}}>待跟进事项</div><b style={{fontSize:24}}>{actionQueue.length}</b></div>
+                </div>
+                {actionQueue.length > 0 && <div style={{border:'1px solid #e8e7df',background:'#fcfbf7',borderRadius:10,padding:'12px 16px',marginBottom:18}}><div style={{fontWeight:600,marginBottom:8}}>管理行动队列</div>{actionQueue.slice(0,5).map((item,i)=><div key={i} onClick={()=>setSelectedHealth(healthProjects.find(p=>p.session_id===item.session_id)||null)} style={{cursor:'pointer',display:'flex',gap:10,padding:'7px 0',borderTop:i?'1px solid #ecece4':'none'}}><Tag color={item.priority==='高'?'red':'orange'}>{item.priority}优先</Tag><span style={{flex:1}}>{item.project} · {item.action}</span><b>{item.health}</b></div>)}</div>}
               <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 18 }}>
                 <div style={{ borderRight: '1px solid #ecece4', paddingRight: 14 }}>
                   <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>仅管理员可见 · 基于已保存方案和资料证据</div>
@@ -254,6 +272,7 @@ export default function Admin({ auth }: { auth: any }) {
                   </div>
                   <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:14 }}>{Object.entries(selectedHealth.dimensions).map(([name,value])=><div key={name} style={{ padding:'12px',border:'1px solid #ecece4',borderRadius:9 }}><div style={{fontSize:12,color:'#888'}}>{name}</div><b style={{fontSize:21}}>{value}</b></div>)}</div>
                 </div>}
+              </div>
               </div>
             ),
           },

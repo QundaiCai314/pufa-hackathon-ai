@@ -1,5 +1,6 @@
 from collections import Counter
 from io import BytesIO
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from docx import Document
@@ -54,7 +55,13 @@ def project_health(user=Depends(admin_user)):
         if conflicts: risks.append({"level":"中", "text":f"{len(conflicts)} 项参数存在资料冲突，待人工核验"})
         if evidence: risks.append({"level":"低", "text":"产品参数已保留可追溯资料来源"})
         items.append({"session_id":str(session["id"]),"project":session["session_name"] or "未命名项目","customer":session["username"],"updated_at":session["updated_at"],"health":health,"dimensions":{"需求完整度":completeness,"产品匹配度":match,"参数可核验度":evidence_score,"现场条件明确度":field_score,"部署可行性":feasibility,"资料一致性":consistency},"risks":risks,"has_proposal":bool(payload)})
-    return {"projects": items}
+    actions = []
+    for item in items:
+        for risk in item["risks"]:
+            if risk["level"] in ("高", "中"):
+                actions.append({"session_id":item["session_id"],"project":item["project"],"customer":item["customer"],"health":item["health"],"priority":risk["level"],"action":risk["text"]})
+    actions.sort(key=lambda x: (0 if x["priority"] == "高" else 1, x["health"]))
+    return {"projects": items, "action_queue": actions}
 
 @router.get("/users")
 def users(user=Depends(admin_user)):
@@ -94,4 +101,5 @@ def sales_plan(session_id: str, user=Depends(admin_user)):
         doc.add_paragraph(f"{'客户' if r['role']=='user' else 'AI'}：{r['content']}")
     out=BytesIO(); doc.save(out); out.seek(0)
     name=f"销售方案_{lead['username']}.docx"
-    return StreamingResponse(out, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', headers={'Content-Disposition': f"attachment; filename*=UTF-8''{name}"})
+    disposition = "attachment; filename=\"sales_proposal.docx\"; filename*=UTF-8''" + quote(name)
+    return StreamingResponse(out, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', headers={'Content-Disposition': disposition})
