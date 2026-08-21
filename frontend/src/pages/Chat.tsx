@@ -328,57 +328,6 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
                 </div>
               ) : (
                 <div>
-                  {/* 知识库来源 (Perplexity 来源卡片行) */}
-                  {m.results && m.results.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, color: '#9c9b96', marginBottom: 8, fontWeight: 500 }}>
-                        参考资料 ({m.results.length})
-                      </div>
-                      <div className="ppx-sources-row">
-                        {m.results.map((r, i) => (
-                          <div key={i} className="ppx-source-card">
-                            <div style={{ fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {r.doc || '资料片段'}
-                            </div>
-                            <div style={{ color: '#7a7973', lineHeight: 1.4, height: 32, overflow: 'hidden' }}>
-                              {r.text}
-                            </div>
-                            <div style={{ color: '#9c9b96', fontSize: 11 }}>
-                              P{r.page} · 匹配度 {(r.score * 100).toFixed(0)}%
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 联网来源 */}
-                  {m.web_sources && m.web_sources.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, color: '#9c9b96', marginBottom: 8, fontWeight: 500 }}>
-                        联网检索结果
-                      </div>
-                      <div className="ppx-sources-row">
-                        {m.web_sources.map((w, i) => (
-                          <a
-                            key={i} href={w.url} target="_blank" rel="noreferrer"
-                            className="ppx-source-card" style={{ textDecoration: 'none' }}
-                          >
-                            <div style={{ fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {w.title}
-                            </div>
-                            <div style={{ color: '#7a7973', lineHeight: 1.4, height: 32, overflow: 'hidden' }}>
-                              {w.snippet || w.url}
-                            </div>
-                            <div style={{ color: '#2563eb', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <GlobalOutlined /> 网页来源
-                            </div>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* 答案正文 */}
                   <div className="ppx-markdown" style={{
                     background: '#fff', border: '1px solid #ecece4', borderRadius: 14,
@@ -406,6 +355,58 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
                       </div>
                     )}
                   </div>
+
+                  {/* 知识库来源 - 缩小版 */}
+                  {m.results && m.results.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#9c9b96', marginBottom: 6 }}>
+                        参考资料 ({m.results.length})
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {m.results.slice(0, 4).map((r, i) => (
+                          <div key={i} style={{
+                            background: '#f8f9fa', borderRadius: 6, padding: '6px 10px',
+                            fontSize: 11, color: '#6b7280', maxWidth: 180,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {r.doc || '资料'} · P{r.page}
+                          </div>
+                        ))}
+                        {m.results.length > 4 && (
+                          <div style={{
+                            background: '#f8f9fa', borderRadius: 6, padding: '6px 10px',
+                            fontSize: 11, color: '#9c9b96',
+                          }}>
+                            +{m.results.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 联网来源 - 缩小版 */}
+                  {m.web_sources && m.web_sources.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#9c9b96', marginBottom: 6 }}>
+                        联网来源
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {m.web_sources.slice(0, 3).map((w, i) => (
+                          <a
+                            key={i} href={w.url} target="_blank" rel="noreferrer"
+                            style={{
+                              background: '#eff6ff', borderRadius: 6, padding: '6px 10px',
+                              fontSize: 11, color: '#2563eb', maxWidth: 180,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {w.title}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 推荐追问 Chips */}
                   {m.followups && m.followups.length > 0 && (
