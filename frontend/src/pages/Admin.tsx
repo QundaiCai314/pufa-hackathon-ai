@@ -178,11 +178,12 @@ export default function Admin({ auth }: { auth: any }) {
   };
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 1180, margin: '0 auto' }}>
-      <Title level={3} style={{ marginTop: 0, fontWeight: 600, letterSpacing: -0.5 }}>
+    <div className="admin-surface" style={{ padding: '36px 44px 56px', maxWidth: 1220, margin: '0 auto' }}>
+      <div className="admin-kicker">运营工作台</div>
+      <Title level={3} style={{ marginTop: 4, marginBottom: 4, fontWeight: 650, letterSpacing: -0.8 }}>
         管理后台
       </Title>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 28 }}>
         用户、会话与销售线索的集中管理。
       </Text>
 
