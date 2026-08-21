@@ -776,6 +776,9 @@ def get_classified_content(doc_name: str) -> dict:
                     "en_name": section.get("page_type_label", ""),
                     "features": section.get("list_items", []),
                     "images": section.get("all_images", []),
+                    "subsections": section.get("subsections", []),
+                    "raw_text": section.get("raw_text", "")[:500],
+                    "image_count": section.get("image_count", 0),
                 }
                 for section in result.get("sections", [])
             ],

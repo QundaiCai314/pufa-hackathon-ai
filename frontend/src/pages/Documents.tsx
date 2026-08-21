@@ -33,6 +33,10 @@ interface ProductGroup {
   intro_products: { model: string; category: string; specs: Record<string, string>; page: number }[];
   spec_products: { model: string; category: string; specs: Record<string, string>; page: number }[];
   spec_page: number | null;
+  images?: { url: string; description: string; page: number; width?: number; height?: number }[];
+  subsections?: { type: string; content: string }[];
+  raw_text?: string;
+  image_count?: number;
 }
 
 interface ProductImage {
@@ -285,6 +289,24 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                         />
                       </div>
                     )}
+                    {g.raw_text && g.raw_text.length > 10 && (
+                      <div style={{ marginTop: 14, fontSize: 13, color: '#5f5e5a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                        {g.raw_text}
+                      </div>
+                    )}
+                    {(g.images || []).length > 0 && (
+                      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+                        {(g.images || []).map((img, j) => (
+                          <AntImage
+                            key={j}
+                            src={img.url}
+                            alt={img.description}
+                            style={{ width: '100%', borderRadius: 8 }}
+                            fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </Space>
@@ -320,9 +342,10 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
                     padding: 12,
                   }}>
                     <AntImage
-                      src={`${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
+                      src={img.url || `${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
                       alt={img.description}
                       style={{ width: '100%', borderRadius: 8 }}
+                      fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
                     />
                     <Paragraph style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: '#5f5e5a' }} ellipsis={{ rows: 3 }}>
                       {img.description || '产品图片'}
