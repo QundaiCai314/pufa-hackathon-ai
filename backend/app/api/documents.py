@@ -222,6 +222,16 @@ async def list_documents():
     return {"status": "ok", "documents": documents, "total": len(documents)}
 
 
+@router.get("/file/{filename}")
+async def get_document_file(filename: str):
+    """返回原始 PDF，用于在详情页按页定位查看来源。"""
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+    if not safe_name.lower().endswith(".pdf") or not os.path.exists(file_path):
+        raise HTTPException(404, "Document not found")
+    return FileResponse(file_path, media_type="application/pdf", filename=safe_name)
+
+
 @router.get("/content/{filename}")
 async def get_content(
     filename: str,

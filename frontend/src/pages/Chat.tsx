@@ -193,6 +193,15 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     setCompareOpen(true);
   };
 
+  const openSourceDocument = (result: SearchResult) => {
+    if (!result.doc) {
+      message.info('当前结果没有可定位的原始文档名称');
+      return;
+    }
+    const filename = result.doc.toLowerCase().endsWith('.pdf') ? result.doc : `${result.doc}.pdf`;
+    window.open(`${API}/api/v1/documents/file/${encodeURIComponent(filename)}#page=${result.page || 1}`, '_blank', 'noopener,noreferrer');
+  };
+
   const openProductDetail = (model: string, results?: SearchResult[]) => {
     setDetailModel(model);
     setDetailResults((results || []).filter(r => r.text.toUpperCase().includes(model.toUpperCase())));
@@ -786,7 +795,10 @@ ${query}`
         ) : detailResults.map((result, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid #f0eee6' : 'none', paddingTop: i ? 12 : 0, marginTop: i ? 12 : 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-              <span>{result.doc || '企业资料'}</span><span>第 {result.page} 页</span>
+              <span>{result.doc || '企业资料'} · 第 {result.page} 页</span>
+              <Button type="link" size="small" onClick={() => openSourceDocument(result)} style={{ padding: 0, fontSize: 11 }}>
+                查看原文
+              </Button>
             </div>
             {result.table_headers && result.table_rows && result.table_rows.length > 0 ? (
               <div style={{ overflowX: 'auto' }}>
