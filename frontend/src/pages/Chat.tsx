@@ -77,6 +77,8 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [detailModel, setDetailModel] = useState('');
   const [detailResults, setDetailResults] = useState<SearchResult[]>([]);
   const [latestProposal, setLatestProposal] = useState<{ id: string; version_no: number; title: string } | null>(null);
+  const [proposalVersions, setProposalVersions] = useState<{ id: string; version_no: number; title: string; created_at: string }[]>([]);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [exportingProposal, setExportingProposal] = useState(false);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
@@ -216,11 +218,18 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     } catch { message.error('方案保存失败，请稍后重试'); } finally { setExportingProposal(false); }
   };
 
-  const downloadProposal = async (format: 'docx' | 'pdf' | 'xlsx') => {
-    if (!sessionId || !latestProposal) { message.info('请先保存方案版本'); return; }
-    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${latestProposal.id}/${format}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+  const loadProposalVersions = async () => {
+    if (!sessionId) { message.info('请先创建或打开会话'); return; }
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) { message.error('方案版本加载失败'); return; }
+    const data = await res.json(); setProposalVersions(data.proposals || []); setVersionsOpen(true);
+  };
+
+  const downloadProposal = async (format: 'docx' | 'pdf' | 'xlsx', proposal = latestProposal) => {
+    if (!sessionId || !proposal) { message.info('请先保存方案版本'); return; }
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${proposal.id}/${format}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     if (!res.ok) { message.error('导出失败'); return; }
-    const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=`proposal_v${latestProposal.version_no}.${format}`; a.click(); URL.revokeObjectURL(url);
+    const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=`proposal_v${proposal.version_no}.${format}`; a.click(); URL.revokeObjectURL(url);
   };
 
   const openProductDetail = (model: string, results?: SearchResult[]) => {
@@ -430,6 +439,7 @@ ${query}`
 
         <Space size={8}>
           <Button size="small" onClick={saveProposal} loading={exportingProposal}>保存方案版本</Button>
+          <Button size="small" onClick={loadProposalVersions}>方案版本</Button>
           {latestProposal && <>
             <Button size="small" onClick={() => downloadProposal('docx')}>Word</Button>
             <Button size="small" onClick={() => downloadProposal('pdf')}>PDF</Button>
@@ -805,6 +815,20 @@ ${query}`
           />
         </div>
       </div>
+
+      <Modal title="方案版本" open={versionsOpen} onCancel={() => setVersionsOpen(false)} footer={null} width={560}>
+        {proposalVersions.length === 0 ? <div style={{ color: '#9c9b96' }}>当前会话还没有已保存的方案版本。</div> : (
+          <List dataSource={proposalVersions} renderItem={(proposal) => (
+            <List.Item actions={[
+              <Button key="word" size="small" onClick={() => downloadProposal('docx', proposal)}>Word</Button>,
+              <Button key="pdf" size="small" onClick={() => downloadProposal('pdf', proposal)}>PDF</Button>,
+              <Button key="excel" size="small" onClick={() => downloadProposal('xlsx', proposal)}>Excel</Button>,
+            ]}>
+              <List.Item.Meta title={`V${proposal.version_no} · ${proposal.title}`} description={new Date(proposal.created_at).toLocaleString()} />
+            </List.Item>
+          )} />
+        )}
+      </Modal>
 
       {/* 产品参数详情 */}
       <Modal
