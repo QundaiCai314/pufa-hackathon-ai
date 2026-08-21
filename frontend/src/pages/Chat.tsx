@@ -150,7 +150,7 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
       const s = await res.json();
       if (requestId !== sessionLoadRef.current) return;
       setSessionId(s.id);
-      onSessionsChange?.(sessions, s.id);
+      // Loading a session must not write the stale local sessions array back to App.
       setRole(s.assistant_role || 'customer_service');
       const hist = (s.messages || []).map((m: any) => ({
         id: m.id || String(Math.random()),

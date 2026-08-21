@@ -170,7 +170,7 @@ const App: React.FC = () => {
 
       <Content style={{ background: '#fff' }}>
         {currentPage === 'home' && <Home auth={auth} onStartChat={goChat} onOpenDocs={() => setCurrentPage('documents')} />}
-        {currentPage === 'chat' && <Chat auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[], selectedId?: string | null) => { setSidebarSessions(sessions); if (selectedId !== undefined) setActiveSessionId(selectedId); }} />}
+        {currentPage === 'chat' && <Chat key={activeSessionId || 'new-chat'} auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[]) => { if (sessions.length > 0) setSidebarSessions(sessions); }} />}
         {currentPage === 'documents' && <Documents auth={auth} isAdmin={isAdmin} />}
         {currentPage === 'admin' && isAdmin && <Admin auth={auth} />}
       </Content>
