@@ -22,6 +22,9 @@ interface SearchResult {
   category: string;
   case_name: string;
   source: string;
+  table_headers?: string[];
+  table_rows?: string[][];
+  table_title?: string;
 }
 
 interface WebSource {
@@ -70,6 +73,9 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [selectionOpen, setSelectionOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareModels, setCompareModels] = useState<string[]>(['CESP250', 'CESP500']);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailModel, setDetailModel] = useState('');
+  const [detailResults, setDetailResults] = useState<SearchResult[]>([]);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
   });
@@ -185,6 +191,12 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     setCompareModels(prev => prev.includes(model) ? prev : [...prev, model]);
     message.success(`${model} 已加入对比`);
     setCompareOpen(true);
+  };
+
+  const openProductDetail = (model: string, results?: SearchResult[]) => {
+    setDetailModel(model);
+    setDetailResults((results || []).filter(r => r.text.toUpperCase().includes(model.toUpperCase())));
+    setDetailOpen(true);
   };
 
   const getProductModels = (results?: SearchResult[]) => {
@@ -547,16 +559,27 @@ ${query}`
                             minWidth: 142, padding: '10px 12px', borderRadius: 9,
                             background: '#fff', border: '1px solid #dbeafe',
                           }}>
-                            <div style={{ fontWeight: 650, fontSize: 13, color: '#1e3a5f' }}>{model}</div>
+                            <div
+                              onClick={() => openProductDetail(model, m.results)}
+                              style={{ fontWeight: 650, fontSize: 13, color: '#1e3a5f', cursor: 'pointer' }}
+                            >{model}</div>
                             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
                               {model.startsWith('CESP') ? 'PEM制氢系统' : model.startsWith('ST') ? '燃料电池电堆' : '燃料电池系统'}
                             </div>
-                            <Button
-                              type="link" size="small" style={{ padding: 0, height: 18, fontSize: 11, color: '#2563eb' }}
-                              onClick={() => handleAddToCompare(model)}
-                            >
-                              加入对比
-                            </Button>
+                            <Space size={8}>
+                              <Button
+                                type="link" size="small" style={{ padding: 0, height: 18, fontSize: 11, color: '#2563eb' }}
+                                onClick={() => openProductDetail(model, m.results)}
+                              >
+                                查看详情
+                              </Button>
+                              <Button
+                                type="link" size="small" style={{ padding: 0, height: 18, fontSize: 11, color: '#2563eb' }}
+                                onClick={() => handleAddToCompare(model)}
+                              >
+                                加入对比
+                              </Button>
+                            </Space>
                           </div>
                         ))}
                       </div>
@@ -746,6 +769,38 @@ ${query}`
           />
         </div>
       </div>
+
+      {/* 产品参数详情 */}
+      <Modal
+        title={`${detailModel} · 产品资料详情`}
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        footer={<Button onClick={() => handleAddToCompare(detailModel)}>加入对比</Button>}
+        width={680}
+      >
+        <div style={{ color: '#7a7973', fontSize: 12, marginBottom: 12 }}>
+          以下内容来自本轮企业知识库检索；字段按原始资料展示。
+        </div>
+        {detailResults.length === 0 ? (
+          <div style={{ color: '#9c9b96', fontSize: 13 }}>本轮未检索到该型号的结构化参数，可通过“加入对比”继续查询。</div>
+        ) : detailResults.map((result, i) => (
+          <div key={i} style={{ borderTop: i ? '1px solid #f0eee6' : 'none', paddingTop: i ? 12 : 0, marginTop: i ? 12 : 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+              <span>{result.doc || '企业资料'}</span><span>第 {result.page} 页</span>
+            </div>
+            {result.table_headers && result.table_rows && result.table_rows.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead><tr>{result.table_headers.map((header, idx) => <th key={idx} style={{ textAlign: 'left', background: '#f8f9fa', padding: '7px 8px', border: '1px solid #e5e7eb' }}>{header}</th>)}</tr></thead>
+                  <tbody>{result.table_rows.map((row, rowIdx) => <tr key={rowIdx}>{row.map((cell, cellIdx) => <td key={cellIdx} style={{ padding: '7px 8px', border: '1px solid #e5e7eb', verticalAlign: 'top' }}>{cell}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.7, color: '#374151' }}>{result.text}</div>
+            )}
+          </div>
+        ))}
+      </Modal>
 
       {/* 产品对比表单 */}
       <Modal
