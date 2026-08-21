@@ -81,6 +81,12 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     
     # 自动判断是否需要联网：用户无需选择搜索模式。
     need_web, web_mode = await llm_service.decide_web_search(request.query)
+    # 明确的企业产品型号查询必须优先走知识库，不能被联网判断提前拦截
+    product_model_query = bool(re.search(r'(ST\d+[A-Z0-9]*|CESP\d+|E\d+)', request.query, re.IGNORECASE))
+    if product_model_query:
+        need_web = False
+        logger.info(f"Product model query forced to knowledge base: {request.query}")
+
     q_lower = request.query.lower()
     web_keywords = ("最新", "最近", "当前", "截至目前", "行业动态", "行业趋势", "竞品", "竞争对手", "市场份额", "市场现状", "政策", "法规", "新闻")
     if any(word in q_lower for word in web_keywords):
