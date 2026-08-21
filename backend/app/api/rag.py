@@ -118,6 +118,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     
     # 检测产品型号并补充上下文关键词
     model_patterns = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+|E\d+)\b', request.query, re.IGNORECASE)
+    logger.info(f"Model detection: query='{request.query}', patterns={model_patterns}")
     if model_patterns:
         # CESP 是 PEM 制氢系统
         if any(m.upper().startswith('CESP') for m in model_patterns):
