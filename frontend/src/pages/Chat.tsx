@@ -73,6 +73,7 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
   });
+  const [profile, setProfile] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const authHeaders = {
@@ -199,6 +200,15 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   };
 
   const handleSelectionSubmit = () => {
+    const profileData: Record<string, string> = {};
+    if (selection.scene) profileData['应用场景'] = selection.scene;
+    if (selection.scale) profileData['目标规模'] = selection.scale;
+    if (selection.pressure) profileData['压力要求'] = selection.pressure;
+    if (selection.purity) profileData['纯度要求'] = selection.purity;
+    if (selection.deployment) profileData['部署方式'] = selection.deployment;
+    if (selection.energy) profileData['能源来源'] = selection.energy;
+    setProfile(prev => ({ ...prev, ...profileData }));
+
     const details = [
       selection.scene && `应用场景：${selection.scene}`,
       selection.scale && `目标规模：${selection.scale}`,
@@ -219,6 +229,13 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const handleSend = async (forcedQuery?: string, forceWeb = false) => {
     const query = (forcedQuery || input).trim();
     if (!query || loading) return;
+    const profileContext = Object.keys(profile).length > 0
+      ? `【当前项目需求画像：${Object.entries(profile).map(([k, v]) => `${k}=${v}`).join('；')}】`
+      : '';
+    const requestQuery = profileContext && !query.includes('当前项目需求画像')
+      ? `${profileContext}
+${query}`
+      : query;
 
     let activeSessionId = sessionId;
     if (!activeSessionId) {
@@ -242,7 +259,7 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          query,
+          query: requestQuery,
           role,
           session_id: activeSessionId,
           force_web: forceWeb,
@@ -344,6 +361,31 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
           </Button>
         </Space>
       </div>
+
+      {/* 项目需求画像 */}
+      {Object.keys(profile).length > 0 && (
+        <div style={{
+          margin: '0 auto 12px', maxWidth: 800, padding: '10px 14px',
+          background: '#fffdf5', border: '1px solid #f0e6b8', borderRadius: 10,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#7c5d15' }}>当前项目需求画像</span>
+            <Button type="text" size="small" onClick={() => setProfile({})} style={{ fontSize: 11, color: '#a18a52', padding: 0 }}>
+              清除
+            </Button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(profile).map(([key, value]) => (
+              <span key={key} style={{ fontSize: 11, color: '#6b5a2a', background: '#fff8d9', borderRadius: 5, padding: '4px 8px' }}>
+                {key}：{value}
+              </span>
+            ))}
+          </div>
+          <div style={{ marginTop: 7, fontSize: 11, color: '#a18a52' }}>
+            AI 会结合这份画像进行后续产品推荐与方案分析
+          </div>
+        </div>
+      )}
 
       {/* 消息滚动区 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px 140px' }}>
