@@ -68,6 +68,8 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [historyOpen, setHistoryOpen] = useState(false);
   const [role, setRole] = useState('customer_service');
   const [selectionOpen, setSelectionOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareModels, setCompareModels] = useState<string[]>(['CESP250', 'CESP500']);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
   });
@@ -170,6 +172,16 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  const handleCompareSubmit = () => {
+    if (compareModels.length < 2) {
+      message.warning('请至少选择两款产品进行对比');
+      return;
+    }
+    setCompareOpen(false);
+    setRole('technical_support');
+    handleSend(`请对比以下产品：${compareModels.join('、')}。请使用Markdown表格列出资料中明确的共同参数和差异，并说明各自适用场景、主要差异、选择建议和待确认条件。不得编造缺失参数。`);
+  };
 
   const handleSelectionSubmit = () => {
     const details = [
@@ -535,6 +547,13 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
           <Space size={8}>
             <Button
               size="small"
+              onClick={() => setCompareOpen(true)}
+              style={{ borderRadius: 14, borderColor: '#dbeafe', color: '#1d4ed8', background: '#eff6ff' }}
+            >
+              产品对比
+            </Button>
+            <Button
+              size="small"
               onClick={() => setSelectionOpen(true)}
               style={{ borderRadius: 14, borderColor: '#bbf7d0', color: '#166534', background: '#f0fdf4' }}
             >
@@ -554,6 +573,34 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
           />
         </div>
       </div>
+
+      {/* 产品对比表单 */}
+      <Modal
+        title="产品对比"
+        open={compareOpen}
+        onCancel={() => setCompareOpen(false)}
+        onOk={handleCompareSubmit}
+        okText="开始对比"
+        cancelText="取消"
+      >
+        <div style={{ color: '#7a7973', fontSize: 13, marginBottom: 14 }}>
+          选择至少两款产品，AI 将从企业资料中提取参数并说明差异。
+        </div>
+        <Select
+          mode="multiple"
+          value={compareModels}
+          onChange={setCompareModels}
+          style={{ width: '100%' }}
+          placeholder="选择产品型号"
+          options={[
+            { value: 'CESP250', label: 'CESP250 · PEM制氢系统' },
+            { value: 'CESP500', label: 'CESP500 · PEM制氢系统' },
+            { value: 'CESP1000', label: 'CESP1000 · PEM制氢系统' },
+            { value: 'ST100G2', label: 'ST100G2 · 燃料电池电堆' },
+            { value: 'ST200G3', label: 'ST200G3 · 燃料电池电堆' },
+          ]}
+        />
+      </Modal>
 
       {/* 智能选型表单 */}
       <Modal
