@@ -223,153 +223,202 @@ export default function Documents({ auth, isAdmin }: { auth: any; isAdmin: boole
     return `${(n / 1024 / 1024).toFixed(2)} MB`;
   };
 
-  // 详情面板
+  // 详情面板 - 文档阅读式布局
   if (selected && classified) {
     const groups = classified.product_groups || [];
     const tables = classified.tables || [];
     const images = classified.product_images || [];
 
-    return (
-      <div style={{ padding: '32px 40px', maxWidth: 980, margin: '0 auto' }}>
-        <Space style={{ marginBottom: 18 }}>
-          <Button onClick={() => { setSelected(null); setClassified(null); }}>← 返回列表</Button>
-          <Title level={4} style={{ margin: 0 }}>{selected}</Title>
-        </Space>
+    // 清理文本：去除多余空白和重复内容
+    const cleanText = (text: string) => {
+      if (!text) return '';
+      return text
+        .replace(/\s+/g, ' ')
+        .replace(/氢璞创能 NOWOGEN/g, '')
+        .replace(/Nowogen Introduction/g, '')
+        .replace(/Core capability/g, '')
+        .replace(/Market driven/g, '')
+        .replace(/Cooperative partner/g, '')
+        .replace(/Digital Platform/g, '')
+        .replace(/Operation Platform/g, '')
+        .replace(/Page \d+-\d+/g, '')
+        .replace(/\d+ \| /g, '')
+        .trim();
+    };
 
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24,
-        }}>
-          {[
-            { label: '章节', value: groups.length, icon: <AppstoreOutlined /> },
-            { label: '产品图片', value: images.length, icon: <PictureOutlined /> },
-            { label: '表格', value: tables.length, icon: <TableOutlined /> },
-            { label: '关键特性', value: groups.reduce((s, g) => s + (g.features?.length || 0), 0), icon: <RocketOutlined /> },
-          ].map((s, i) => (
-            <div key={i} style={{
-              background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: '16px 18px',
-            }}>
-              <div style={{ fontSize: 12, color: '#9c9b96', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                {s.icon} {s.label}
-              </div>
-              <div style={{ fontSize: 24, fontWeight: 600 }}>{s.value}</div>
-            </div>
-          ))}
+    // 提取关键数据点（数字+描述）
+    const extractKeyPoints = (text: string) => {
+      if (!text) return [];
+      const points: { num: string; desc: string }[] = [];
+      const cleanText = text.split(String.fromCharCode(10)).join(' ');
+      const patterns = [
+        /(\d+)[：:]\s*([^。]+)/g,
+        /(\d+\/\d+代)[：:]\s*([^。]+)/g,
+        /(\d+亿)[：:]\s*([^。]+)/g,
+        /(\d+\+)[：:]\s*([^。]+)/g,
+        /(\d+万)[：:]\s*([^。]+)/g,
+      ];
+      patterns.forEach(p => {
+        let m;
+        while ((m = p.exec(cleanText)) !== null) {
+          points.push({ num: m[1], desc: m[2].trim() });
+        }
+      });
+      return points.slice(0, 6);
+    };
+
+    return (
+      <div style={{ padding: '32px 40px', maxWidth: 860, margin: '0 auto' }}>
+        {/* 头部 */}
+        <div style={{ marginBottom: 32 }}>
+          <Button onClick={() => { setSelected(null); setClassified(null); }} style={{ marginBottom: 16 }}>
+            ← 返回列表
+          </Button>
+          <Title level={2} style={{ margin: 0, fontWeight: 600 }}>{selected.replace('.pdf', '')}</Title>
+          <Text type="secondary" style={{ fontSize: 14 }}>
+            {groups.length} 个章节 · {images.length} 张图片 · {tables.length} 个表格
+          </Text>
         </div>
 
-        <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-          {
-            key: 'groups', label: '内容概览',
-            children: groups.length === 0 ? <Empty description="暂无内容" /> : (
-              <div>
-                {/* 封面/标题区 */}
-                {groups[0] && (
+        {/* 目录导航 */}
+        {groups.length > 1 && (
+          <div style={{
+            background: '#f8f9fa', borderRadius: 12, padding: '16px 20px', marginBottom: 32,
+            display: 'flex', flexWrap: 'wrap', gap: 8,
+          }}>
+            {groups.map((g, i) => (
+              <a key={i} href={`#section-${i}`} style={{
+                padding: '6px 14px', background: '#fff', borderRadius: 20,
+                fontSize: 13, color: '#374151', textDecoration: 'none',
+                border: '1px solid #e5e7eb',
+              }}>
+                {g.category_name}
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* 内容区 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+          {groups.map((g, i) => {
+            const keyPoints = extractKeyPoints(g.raw_text || '');
+            const cleanContent = cleanText(g.raw_text || '');
+            const paragraphs = cleanContent.split(/(?=[。！？])/).filter(p => p.trim().length > 10);
+
+            return (
+              <section key={i} id={`section-${i}`} style={{ scrollMarginTop: 20 }}>
+                {/* 章节标题 */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <span style={{
+                      width: 32, height: 32, borderRadius: 8, background: '#111',
+                      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 14, fontWeight: 600,
+                    }}>
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <Title level={3} style={{ margin: 0, fontWeight: 600 }}>{g.category_name}</Title>
+                  </div>
+                  {g.en_name && (
+                    <Text type="secondary" style={{ fontSize: 13, marginLeft: 44 }}>{g.en_name}</Text>
+                  )}
+                </div>
+
+                {/* 关键数据卡片 */}
+                {keyPoints.length > 0 && (
                   <div style={{
-                    background: 'linear-gradient(135deg, #f0f7f4 0%, #e8f4f8 100%)',
-                    borderRadius: 16, padding: '32px 36px', marginBottom: 24,
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                    gap: 12, marginBottom: 20,
                   }}>
-                    <Title level={2} style={{ margin: 0, fontWeight: 600 }}>{groups[0].category_name}</Title>
-                    {groups[0].en_name && <Text style={{ fontSize: 14, color: '#6b7280' }}>{groups[0].en_name}</Text>}
-                    {groups[0].raw_text && (
-                      <Paragraph style={{ marginTop: 16, fontSize: 14, color: '#4b5563', lineHeight: 1.8 }}>
-                        {groups[0].raw_text.substring(0, 300)}
-                      </Paragraph>
-                    )}
+                    {keyPoints.map((kp, j) => (
+                      <div key={j} style={{
+                        background: '#f0fdf4', borderRadius: 10, padding: '14px 16px',
+                        border: '1px solid #bbf7d0',
+                      }}>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: '#166534' }}>{kp.num}</div>
+                        <div style={{ fontSize: 12, color: '#15803d', marginTop: 4, lineHeight: 1.4 }}>{kp.desc}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* 内容卡片流 */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-                  {groups.slice(1).map((g, i) => (
-                    <div key={i} style={{
-                      background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px',
-                      transition: 'box-shadow 0.2s',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <Title level={5} style={{ margin: 0, fontWeight: 600, flex: 1 }}>{g.category_name}</Title>
-                        {g.en_name && <Tag style={{ fontSize: 11, marginLeft: 8, flexShrink: 0 }}>{g.en_name}</Tag>}
+                {/* 特性列表 */}
+                {g.features && g.features.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    {g.features.map((f, j) => (
+                      <div key={j} style={{
+                        display: 'flex', gap: 10, marginBottom: 8, fontSize: 14, color: '#374151',
+                      }}>
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>✓</span>
+                        <span>{f}</span>
                       </div>
-                      {g.features?.length > 0 && (
-                        <div style={{ marginBottom: 12 }}>
-                          {g.features.slice(0, 3).map((f, j) => (
-                            <div key={j} style={{ fontSize: 13, color: '#374151', marginBottom: 4, display: 'flex', gap: 6 }}>
-                              <span style={{ color: '#10b981', flexShrink: 0 }}>•</span>
-                              <span>{f}</span>
-                            </div>
-                          ))}
-                          {g.features.length > 3 && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>+{g.features.length - 3} 项</Text>
-                          )}
-                        </div>
-                      )}
-                      {g.raw_text && g.raw_text.length > 10 && (
-                        <Paragraph style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }} ellipsis={{ rows: 4 }}>
-                          {g.raw_text}
-                        </Paragraph>
-                      )}
-                      {(g.images || []).length > 0 && (
-                        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: `repeat(${Math.min((g.images || []).length, 3)}, 1fr)`, gap: 6 }}>
-                          {(g.images || []).slice(0, 3).map((img, j) => (
-                            <AntImage
-                              key={j}
-                              src={`${API}${img.url}`}
-                              alt={img.description}
-                              style={{ width: '100%', borderRadius: 6, aspectRatio: '1', objectFit: 'cover' }}
-                              fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+
+                {/* 正文段落 */}
+                {paragraphs.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    {paragraphs.slice(0, 5).map((p, j) => (
+                      <Paragraph key={j} style={{
+                        fontSize: 14, color: '#4b5563', lineHeight: 1.9, marginBottom: 12,
+                      }}>
+                        {p.trim()}
+                      </Paragraph>
+                    ))}
+                  </div>
+                )}
+
+                {/* 图片展示 */}
+                {(g.images || []).length > 0 && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: (g.images || []).length === 1 ? '1fr' : 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: 12,
+                  }}>
+                    {(g.images || []).map((img, j) => (
+                      <div key={j} style={{ borderRadius: 10, overflow: 'hidden', background: '#f3f4f6' }}>
+                        <AntImage
+                          src={`${API}${img.url}`}
+                          alt={img.description}
+                          style={{ width: '100%', display: 'block' }}
+                          fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
+                        />
+                        {img.description && (
+                          <div style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280' }}>
+                            {img.description}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+
+        {/* 表格区 */}
+        {tables.length > 0 && (
+          <div style={{ marginTop: 48 }}>
+            <Title level={4} style={{ marginBottom: 20 }}>数据表格</Title>
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              {tables.map((t, i) => (
+                <div key={i} style={{
+                  background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 20,
+                }}>
+                  <div style={{ marginBottom: 12, fontWeight: 500 }}>{t.title || `表格 ${i + 1}`}</div>
+                  <Table
+                    size="small" pagination={false}
+                    dataSource={t.rows.map((r, j) => ({ key: j, ...Object.fromEntries(r.map((v, k) => [t.headers[k] || `col${k}`, v])) }))}
+                    columns={t.headers.map((h, j) => ({ title: h, dataIndex: h || `col${j}`, key: h || `col${j}` }))}
+                    scroll={{ x: 'max-content' }}
+                  />
                 </div>
-              </div>
-            ),
-          },
-          {
-            key: 'tables', label: '表格',
-            children: tables.length === 0 ? <Empty description="暂无表格" /> : (
-              <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                {tables.map((t, i) => (
-                  <div key={i} style={{
-                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12, padding: 20,
-                  }}>
-                    <div style={{ marginBottom: 10, fontWeight: 500 }}>{t.title || `表格 (P${t.page})`}</div>
-                    <Table
-                      size="small" pagination={false}
-                      dataSource={t.rows.map((r, j) => ({ key: j, ...Object.fromEntries(r.map((v, k) => [t.headers[k] || `col${k}`, v])) }))}
-                      columns={t.headers.map((h, j) => ({ title: h, dataIndex: h || `col${j}`, key: h || `col${j}` }))}
-                      scroll={{ x: 'max-content' }}
-                    />
-                  </div>
-                ))}
-              </Space>
-            ),
-          },
-          {
-            key: 'images', label: '产品图片',
-            children: images.length === 0 ? <Empty description="暂无产品图片" /> : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                {images.map((img, i) => (
-                  <div key={i} style={{
-                    background: '#fff', border: '1px solid #ecece4', borderRadius: 12,
-                    padding: 12,
-                  }}>
-                    <AntImage
-                      src={img.url ? `${API}${img.url}` : `${API}/api/v1/documents/image/${encodeURIComponent(selected!)}?page=${img.page}&index=${img.index}`}
-                      alt={img.description}
-                      style={{ width: '100%', borderRadius: 8 }}
-                      fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23999' font-size='12'%3E无图片%3C/text%3E%3C/svg%3E"
-                    />
-                    <Paragraph style={{ marginTop: 10, marginBottom: 0, fontSize: 13, color: '#5f5e5a' }} ellipsis={{ rows: 3 }}>
-                      {img.description || '产品图片'}
-                    </Paragraph>
-                    <div style={{ fontSize: 11, color: '#9c9b96', marginTop: 4 }}>P{img.page} · {img.width}×{img.height}</div>
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-        ]} />
+              ))}
+            </Space>
+          </div>
+        )}
       </div>
     );
   }
