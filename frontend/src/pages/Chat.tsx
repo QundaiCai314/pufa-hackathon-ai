@@ -66,6 +66,7 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -144,30 +145,41 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
     const requestId = ++sessionLoadRef.current;
     setSessionId(id);
     setMessages([]);
+    setHistoryLoading(true);
     try {
-      const res = await fetch(`${API}/api/v1/auth/sessions/${id}`, { headers: authHeaders });
-      if (!res.ok || requestId !== sessionLoadRef.current) return;
-      const s = await res.json();
+      const sessionRes = await fetch(`${API}/api/v1/auth/sessions/${id}`, { headers: authHeaders });
+      if (!sessionRes.ok || requestId !== sessionLoadRef.current) return;
+      const session = await sessionRes.json();
+      const messagesRes = await fetch(`${API}/api/v1/auth/sessions/${id}/messages`, { headers: authHeaders });
+      if (!messagesRes.ok || requestId !== sessionLoadRef.current) throw new Error('历史消息加载失败');
+      const messageData = await messagesRes.json();
       if (requestId !== sessionLoadRef.current) return;
-      setSessionId(s.id);
-      // Loading a session must not write the stale local sessions array back to App.
-      setRole(s.assistant_role || 'customer_service');
-      const hist = (s.messages || []).map((m: any) => ({
-        id: m.id || String(Math.random()),
-        role: m.role,
-        content: m.content,
-        answer: m.role === 'assistant' ? m.content : undefined,
-        results: m.metadata?.results || [],
-        followups: m.metadata?.followups || [],
-        web_sources: m.metadata?.web_sources || [],
-        no_result: !!m.metadata?.no_result,
-        web_available: !!m.metadata?.web_available,
-        timestamp: new Date(m.created_at || Date.now()),
-      }));
+      setSessionId(session.id || id);
+      setRole(session.assistant_role || 'customer_service');
+      const hist = (messageData.messages || []).map((m: any) => {
+        let metadata: any = m.metadata || {};
+        if (typeof metadata === 'string') {
+          try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+        }
+        return {
+          id: String(m.id || Math.random()),
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: String(m.content || ''),
+          answer: m.role === 'assistant' ? String(m.content || '') : undefined,
+          results: Array.isArray(metadata.results) ? metadata.results : [],
+          followups: Array.isArray(metadata.followups) ? metadata.followups : [],
+          web_sources: Array.isArray(metadata.web_sources) ? metadata.web_sources : [],
+          no_result: !!metadata.no_result,
+          web_available: !!metadata.web_available,
+          timestamp: new Date(m.created_at || Date.now()),
+        } as Message;
+      });
       setMessages(hist);
       setHistoryOpen(false);
-    } catch {
-      // 忽略
+    } catch (e: any) {
+      if (requestId === sessionLoadRef.current) message.error(e.message || '历史消息加载失败');
+    } finally {
+      if (requestId === sessionLoadRef.current) setHistoryLoading(false);
     }
   };
 
@@ -564,7 +576,12 @@ ${query}`
       {/* 消息滚动区 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px 140px' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
-          {messages.length === 0 && (
+          {historyLoading && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '72px 0 32px' }}>
+              <Spin tip="正在加载对话记录" />
+            </div>
+          )}
+          {!historyLoading && messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '80px 0 40px' }}>
               <div style={{
                 width: 44, height: 44, borderRadius: 12, background: '#111',
@@ -580,7 +597,7 @@ ${query}`
             </div>
           )}
 
-          {messages.map((m) => (
+          {!historyLoading && messages.map((m) => (
             <div key={m.id} style={{ marginBottom: 28 }}>
               {m.role === 'user' ? (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
