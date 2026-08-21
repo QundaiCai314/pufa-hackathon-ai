@@ -264,7 +264,7 @@ class RAGService:
 
         # 关键词增强：检测产品型号并提升匹配结果
         # 匹配 ST100G2、CESP250、E200 等型号
-        model_patterns = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+|E\d+)\b', query, re.IGNORECASE)
+        model_patterns = re.findall(r'(ST\d+[A-Z0-9]*|CESP\d+|E\d+)', query, re.IGNORECASE)
         if model_patterns:
             boosted_hits = []
             other_hits = []

@@ -117,7 +117,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
     
     # 检测产品型号并补充上下文关键词
-    model_patterns = re.findall(r'\b(ST\d+[A-Z0-9]*|CESP\d+|E\d+)\b', request.query, re.IGNORECASE)
+    model_patterns = re.findall(r'(ST\d+[A-Z0-9]*|CESP\d+|E\d+)', request.query, re.IGNORECASE)
     logger.info(f"Model detection: query='{request.query}', patterns={model_patterns}")
     if model_patterns:
         # CESP 是 PEM 制氢系统
@@ -205,6 +205,8 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
 
 请问您想详细了解哪一款产品的参数和特性？"""
     else:
+        # 检查 results 是否为空或质量差
+        logger.info(f"Calling LLM with {len(results)} results, first result: {results[0] if results else 'None'}")
         answer = await llm_service.generate_answer(
             query=effective_query,
             search_results=results,
