@@ -112,7 +112,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
         effective_query = f"{request.context_query} {request.query}"
     
     # 检测产品列表类查询
-    product_list_keywords = ("产品有哪些", "有哪些产品", "所有产品", "产品列表", "产品型号", "全部产品", "产品介绍", "介绍.*产品", "你们的产品", "公司产品")
+    product_list_keywords = ("产品有哪些", "有哪些产品", "所有产品", "产品列表", "产品型号", "全部产品", "产品介绍", "介绍产品", "你们的产品", "公司产品", "产品线", "产品系列", "主营产品", "产品包括")
     is_product_list_query = any(kw in request.query for kw in product_list_keywords)
     logger.info(f"Query: '{request.query}', is_product_list_query={is_product_list_query}")
     
