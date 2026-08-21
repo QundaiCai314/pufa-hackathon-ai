@@ -12,6 +12,7 @@ import logging
 import asyncio
 import re
 from typing import Optional
+from urllib.parse import quote
 from pathlib import Path
 
 import httpx
@@ -603,7 +604,7 @@ def _classify_brochure(doc_name: str, analysis: dict) -> dict:
                         "description": crop.get("description", ""),
                         "page": pn,
                         "has_file": True,
-                        "url": f"/api/v1/documents/crop_image/{doc_name}/{pn}/v{block_idx}",
+                        "url": f"/api/v1/documents/crop_image/{quote(doc_name)}/{pn}/v{block_idx}",
                     }
                     # 传递额外字段：ai_description, category, case
                     if crop.get("ai_description"):
@@ -643,7 +644,7 @@ def _classify_brochure(doc_name: str, analysis: dict) -> dict:
                         "description": desc,
                         "page": pn,
                         "has_file": True,
-                        "url": f"/api/v1/documents/crop_image/{doc_name}/{pn}/{orig_idx}",
+                        "url": f"/api/v1/documents/crop_image/{quote(doc_name)}/{pn}/{orig_idx}",
                     })
                 elif gi < n_ext:
                     ext_img = extracted[gi]
@@ -656,7 +657,7 @@ def _classify_brochure(doc_name: str, analysis: dict) -> dict:
                         "width": ext_img["width"],
                         "height": ext_img["height"],
                         "has_file": True,
-                        "url": f"/api/v1/documents/extracted_image/{doc_name}.pdf/{pn}/{ext_img['index']}",
+                        "url": f"/api/v1/documents/extracted_image/{quote(doc_name)}.pdf/{pn}/{ext_img['index']}",
                     })
                 else:
                     images_by_type[itype].append({
@@ -987,7 +988,7 @@ def get_classified_content(doc_name: str) -> dict:
                 "width": ext_img["width"],
                 "height": ext_img["height"],
                 "description": desc,
-                "url": f"/api/v1/documents/extracted_image/{doc_name}.pdf/{pn}/{ext_img['index']}",
+                "url": f"/api/v1/documents/extracted_image/{quote(doc_name)}.pdf/{pn}/{ext_img['index']}",
             })
         
         # 其他分类内容
