@@ -50,6 +50,18 @@ def normalize_result_rows(results: list):
     return rows
 
 
+def canonical_value(value: str):
+    """仅对明确的压力单位做等值归一化；无法解析时保留原值，避免误改资料。"""
+    import re
+    raw = str(value or '').strip().replace('，', ',')
+    m = re.fullmatch(r'\s*([0-9]+(?:\.[0-9]+)?)\s*(kpa|kpag|mpa|mpag|bar)\s*', raw, re.I)
+    if not m: return raw
+    number, unit = float(m.group(1)), m.group(2).lower()
+    factor = {'kpa': 1, 'kpag': 1, 'mpa': 1000, 'mpag': 1000, 'bar': 100}[unit]
+    suffix = 'gauge' if unit.endswith('g') else 'absolute_or_unspecified'
+    return f'{number * factor:.6f}|{suffix}'
+
+
 def detect_conflicts(rows: list):
     grouped = {}
     for item in rows:
@@ -57,9 +69,12 @@ def detect_conflicts(rows: list):
         grouped.setdefault(key, []).append(item)
     conflicts = []
     for (model, field), items in grouped.items():
-        values = {str(x.get("value", "")).strip() for x in items if str(x.get("value", "")).strip()}
-        if len(values) > 1:
-            conflicts.append({"model": model, "field": field, "values": sorted(values), "sources": [{"doc":x.get("doc"), "page":x.get("page"), "value":x.get("value")} for x in items]})
+        canonical = {}
+        for item in items:
+            value = str(item.get("value", "")).strip()
+            if value: canonical.setdefault(canonical_value(value), []).append(item)
+        if len(canonical) > 1:
+            conflicts.append({"model": model, "field": field, "values": sorted({str(x.get("value", "")).strip() for x in items}), "sources": [{"doc":x.get("doc"), "page":x.get("page"), "value":x.get("value")} for x in items]})
     return conflicts
 
 

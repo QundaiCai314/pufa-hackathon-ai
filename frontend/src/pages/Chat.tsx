@@ -80,6 +80,7 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [proposalVersions, setProposalVersions] = useState<{ id: string; version_no: number; title: string; created_at: string }[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versionDiff, setVersionDiff] = useState<any>(null);
+  const [proposalConflicts, setProposalConflicts] = useState<any[]>([]);
   const [exportingProposal, setExportingProposal] = useState(false);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
@@ -220,7 +221,12 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     try {
       const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ title: `项目技术方案-${new Date().toLocaleDateString()}`, profile, content: assistant.content, results: assistant.results || [] }) });
       if (!res.ok) throw new Error('保存失败');
-      const data = await res.json(); setLatestProposal(data.proposal); message.success(`方案 V${data.proposal.version_no} 已保存，可导出 Word、PDF 或 Excel`);
+      const data = await res.json(); setLatestProposal(data.proposal);
+      if ((data.conflicts || []).length > 0) {
+        message.warning(`方案 V${data.proposal.version_no} 已保存，但检测到 ${data.conflicts.length} 项参数冲突，请在方案版本中核验来源。`);
+      } else {
+        message.success(`方案 V${data.proposal.version_no} 已保存，可导出 Word、PDF 或 Excel`);
+      }
     } catch { message.error('方案保存失败，请稍后重试'); } finally { setExportingProposal(false); }
   };
 
@@ -238,7 +244,14 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     const data = await res.json(); const payload = data.proposal.payload;
     setProfile(payload.profile || {});
     setMessages(prev => [...prev, { id: `restore-${Date.now()}`, role: 'assistant', content: payload.content || '', answer: payload.content || '', results: payload.results || [], timestamp: new Date() }]);
-    setLatestProposal(data.proposal); setVersionsOpen(false); message.success(`已恢复 V${proposal.version_no} 为当前方案草稿`);
+    setLatestProposal(data.proposal); setProposalConflicts(payload.conflicts || []); setVersionsOpen(false); message.success(`已恢复 V${proposal.version_no} 为当前方案草稿`);
+  };
+
+  const showProposalConflicts = async (proposal: { id: string }) => {
+    if (!sessionId) return;
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${proposal.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) { message.error('参数核验信息加载失败'); return; }
+    const data = await res.json(); setProposalConflicts(data.proposal.payload?.conflicts || []);
   };
 
   const compareProposal = async (proposal: { id: string; version_no: number }) => {
@@ -852,6 +865,7 @@ ${query}`
             <List.Item actions={[
               <Button key="restore" size="small" onClick={() => restoreProposal(proposal)}>恢复</Button>,
               <Button key="diff" size="small" onClick={() => compareProposal(proposal)}>差异</Button>,
+              <Button key="conflict" size="small" onClick={() => showProposalConflicts(proposal)}>核验</Button>,
               <Button key="word" size="small" onClick={() => downloadProposal('docx', proposal)}>Word</Button>,
               <Button key="pdf" size="small" onClick={() => downloadProposal('pdf', proposal)}>PDF</Button>,
               <Button key="excel" size="small" onClick={() => downloadProposal('xlsx', proposal)}>Excel</Button>,
@@ -860,6 +874,13 @@ ${query}`
             </List.Item>
           )} />
         )}
+        {proposalConflicts.length > 0 && <div style={{ marginTop: 16, padding: 12, background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 600, color: '#a8071a', marginBottom: 6 }}>参数冲突待核验（{proposalConflicts.length} 项）</div>
+          {proposalConflicts.map((conflict: any, index: number) => <div key={index} style={{ marginBottom: 8 }}>
+            <b>{conflict.model} · {conflict.field}</b>：{conflict.values.join(' / ')}
+            {conflict.sources.map((source: any, i: number) => <div key={i} style={{ color: '#7a3a35', marginTop: 2 }}>· {source.value} — {source.doc || '企业资料'} P{source.page || '?'}</div>)}
+          </div>)}
+        </div>}
         {versionDiff && <div style={{ marginTop: 16, padding: 12, background: '#fff8e8', borderRadius: 8, fontSize: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>V{versionDiff.base_version} → V{versionDiff.target_version} 差异</div>
           {versionDiff.profile_changes.length === 0 ? '需求画像无变化' : versionDiff.profile_changes.map((item: any) => <div key={item.field}>{item.field}：{item.from || '未填写'} → {item.to || '未填写'}</div>)}
