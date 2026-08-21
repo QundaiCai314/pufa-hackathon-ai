@@ -221,6 +221,16 @@ def sessions(user=Depends(current_user)):
         rows=conn.execute(text("SELECT id,session_name,assistant_role,lead_score,lead_level,lead_signals,created_at,updated_at FROM chat_sessions WHERE user_id=:u ORDER BY updated_at DESC"),{"u":user["id"]}).mappings().all()
     return {"sessions":[dict(r) for r in rows]}
 
+@router.get("/sessions/{session_id}")
+def get_session(session_id: str, user=Depends(current_user)):
+    """加载单个会话及完整消息历史，供前端历史记录抽屉恢复上下文。"""
+    with db().connect() as conn:
+        session = conn.execute(text("SELECT id,session_name,assistant_role,created_at,updated_at FROM chat_sessions WHERE id=:s AND user_id=:u"), {"s":session_id,"u":user["id"]}).mappings().first()
+        if not session: raise HTTPException(404, "会话不存在")
+        rows = conn.execute(text("SELECT id,role,content,metadata,created_at FROM chat_messages WHERE session_id=:s ORDER BY created_at"), {"s":session_id}).mappings().all()
+    data = dict(session); data["messages"] = [dict(row) for row in rows]
+    return data
+
 @router.post("/sessions")
 def create_session(req: SessionRequest, user=Depends(current_user)):
     with db().begin() as conn:

@@ -105,8 +105,8 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       if (!res.ok) return;
       const data = await res.json();
       setSessions(data.sessions || []);
-      if (!sessionId && data.length > 0) {
-        loadSession(data[0].id);
+      if (!sessionId && (data.sessions || []).length > 0) {
+        loadSession(data.sessions[0].id);
       }
     } catch {
       // 忽略后台加载错误
