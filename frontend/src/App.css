@@ -348,6 +348,18 @@ body {
   .admin-surface [style*="repeat(4, 1fr)"],
   .admin-surface [style*="repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
 }
+.sidebar-new-chat { background: var(--accent) !important; border-color: var(--accent) !important; }
+.sidebar-new-chat:hover { background: var(--accent-strong) !important; border-color: var(--accent-strong) !important; }
+.sidebar-section-label { display: flex; justify-content: space-between; padding: 0 10px 8px; color: var(--text-subtle); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.sidebar-history { flex: 1; min-height: 0; margin: 6px -2px 14px; display: flex; flex-direction: column; }
+.sidebar-history-list { overflow-y: auto; min-height: 40px; padding: 0 2px; }
+.sidebar-history-empty { color: var(--text-subtle); font-size: 12px; padding: 10px; }
+.sidebar-history-item { display: flex; align-items: center; gap: 4px; min-height: 35px; padding: 6px 7px 6px 10px; border-radius: 7px; color: var(--text-muted); cursor: pointer; transition: background .15s, color .15s; }
+.sidebar-history-item:hover, .sidebar-history-item.is-active { background: var(--accent-soft); color: var(--text-main); }
+.sidebar-history-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.sidebar-history-delete { flex: 0 0 auto; opacity: 0; color: var(--text-subtle) !important; }
+.sidebar-history-item:hover .sidebar-history-delete, .sidebar-history-item.is-active .sidebar-history-delete { opacity: 1; }
+.sidebar-history-delete:hover { color: #a33a2b !important; background: transparent !important; }
 @media (max-width: 620px) {
   .admin-surface { padding: 24px 16px 36px !important; }
   .admin-surface [style*="repeat(4, 1fr)"],

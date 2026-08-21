@@ -4,7 +4,7 @@ import {
   Drawer, Popconfirm, Select, Card, Tooltip, App as AntApp,
 } from 'antd';
 import {
-  PlusOutlined, DeleteOutlined, HistoryOutlined, GlobalOutlined, ArrowUpOutlined,
+  PlusOutlined, DeleteOutlined, GlobalOutlined, ArrowUpOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -60,7 +60,7 @@ const ROLE_OPTIONS = [
   { value: 'technical_support', label: '技术专家' },
 ];
 
-export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?: string; clearPreset?: () => void }) {
+export default function Chat({ auth, preset, initialSessionId, clearPreset, onSessionsChange }: { auth: any; preset?: string; initialSessionId?: string | null; clearPreset?: () => void; onSessionsChange?: (sessions: ChatSession[], selectedId?: string | null) => void }) {
   const { message } = AntApp.useApp();
   const token = auth?.token;
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,9 +106,13 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       const res = await fetch(`${API}/api/v1/auth/sessions`, { headers: authHeaders });
       if (!res.ok) return;
       const data = await res.json();
-      setSessions(data.sessions || []);
-      if (!sessionId && (data.sessions || []).length > 0) {
-        loadSession(data.sessions[0].id);
+      const nextSessions = data.sessions || [];
+      setSessions(nextSessions);
+      onSessionsChange?.(nextSessions, initialSessionId || (sessionId || nextSessions[0]?.id || null));
+      if (!sessionId && initialSessionId) {
+        loadSession(initialSessionId);
+      } else if (!sessionId && nextSessions.length > 0) {
+        loadSession(nextSessions[0].id);
       }
     } catch {
       // 忽略后台加载错误
@@ -126,8 +130,10 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       if (!res.ok) return null;
       const data = await res.json();
       const s = data.session;
-      setSessions((prev) => [s, ...prev]);
+      const nextSessions = [s, ...sessions];
+      setSessions(nextSessions);
       setSessionId(s.id);
+      onSessionsChange?.(nextSessions, s.id);
       setRole(s.assistant_role || 'customer_service');
       setMessages([]);
       return s.id;
@@ -143,6 +149,7 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       if (!res.ok) return;
       const s = await res.json();
       setSessionId(s.id);
+      onSessionsChange?.(sessions, s.id);
       setRole(s.assistant_role || 'customer_service');
       const hist = (s.messages || []).map((m: any) => ({
         id: m.id || String(Math.random()),
@@ -193,6 +200,10 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       if (clearPreset) clearPreset();
     }
   }, [preset]);
+
+  useEffect(() => {
+    if (initialSessionId && initialSessionId !== sessionId) loadSession(initialSessionId);
+  }, [initialSessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -488,12 +499,6 @@ ${query}`
             <Button size="small" onClick={() => downloadProposal('pdf')}>PDF</Button>
             <Button size="small" onClick={() => downloadProposal('xlsx')}>Excel</Button>
           </>}
-          <Button
-            type="text" icon={<HistoryOutlined />}
-            onClick={() => setHistoryOpen(true)}
-          >
-            历史记录 ({sessions.length})
-          </Button>
           <Button
             type="text" icon={<PlusOutlined />}
             onClick={() => createSession()}

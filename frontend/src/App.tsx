@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   HomeOutlined, FileTextOutlined, MessageOutlined, SettingOutlined,
-  PlusOutlined, LogoutOutlined,
+  PlusOutlined, LogoutOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -23,13 +23,34 @@ const clearAuth = () => localStorage.removeItem(AUTH_KEY);
 
 type Page = 'home' | 'chat' | 'documents' | 'admin';
 
+interface SidebarSession {
+  id: string;
+  session_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 const App: React.FC = () => {
   const { message } = AntApp.useApp();
   const [auth, setAuthState] = useState<any>(getAuth());
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [chatPreset, setChatPreset] = useState<string | undefined>(undefined);
+  const [sidebarSessions, setSidebarSessions] = useState<SidebarSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   const isAdmin = !!auth?.user?.is_admin;
+  const token = auth?.token;
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const loadSidebarSessions = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/sessions`, { headers: authHeaders });
+      if (res.ok) setSidebarSessions((await res.json()).sessions || []);
+    } catch { /* sidebar history is non-blocking */ }
+  };
+
+  useEffect(() => { loadSidebarSessions(); }, [token]);
 
   useEffect(() => {
     document.title = '氢璞 AI · 企业知识助手';
@@ -43,9 +64,30 @@ const App: React.FC = () => {
     message.success('已退出登录');
   };
 
-  const goChat = (preset?: string) => {
+  const goChat = (preset?: string, sessionId?: string) => {
     setChatPreset(preset);
+    setActiveSessionId(sessionId || null);
     setCurrentPage('chat');
+  };
+
+  const createSidebarSession = async () => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/sessions`, { method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ session_name: '新对话', assistant_role: 'customer_service' }) });
+      if (!res.ok) return;
+      const s = (await res.json()).session;
+      setSidebarSessions(prev => [s, ...prev]);
+      goChat(undefined, s.id);
+    } catch { message.error('创建对话失败'); }
+  };
+
+  const deleteSidebarSession = async (id: string) => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/sessions/${id}`, { method: 'DELETE', headers: authHeaders });
+      if (!res.ok) throw new Error();
+      setSidebarSessions(prev => prev.filter(s => s.id !== id));
+      if (activeSessionId === id) setActiveSessionId(null);
+      message.success('已删除对话');
+    } catch { message.error('删除失败'); }
   };
 
   return (
@@ -69,10 +111,11 @@ const App: React.FC = () => {
 
           <Button
             type="primary" size="large" icon={<PlusOutlined />}
-            onClick={() => goChat()}
+            onClick={createSidebarSession}
+            className="sidebar-new-chat"
             style={{
-              marginBottom: 24, height: 44, borderRadius: 10,
-              background: '#111', borderColor: '#111', fontWeight: 500,
+              marginBottom: 22, height: 42, borderRadius: 8,
+              fontWeight: 600,
             }}
             block
           >新对话</Button>
@@ -90,6 +133,18 @@ const App: React.FC = () => {
               ...(isAdmin ? [{ key: 'admin', icon: <SettingOutlined />, label: '管理后台' }] : []),
             ]}
           />
+
+          <div className="sidebar-history">
+            <div className="sidebar-section-label"><span>最近对话</span><span>{sidebarSessions.length || ''}</span></div>
+            <div className="sidebar-history-list">
+              {sidebarSessions.length === 0 ? <div className="sidebar-history-empty">暂无历史记录</div> : sidebarSessions.slice(0, 12).map((s) => (
+                <div key={s.id} className={`sidebar-history-item ${s.id === activeSessionId ? 'is-active' : ''}`} onClick={() => goChat(undefined, s.id)} title={s.session_name || '新对话'}>
+                  <span className="sidebar-history-name">{s.session_name || '新对话'}</span>
+                  <Button type="text" size="small" className="sidebar-history-delete" icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); deleteSidebarSession(s.id); }} />
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div style={{
             padding: 12, borderTop: '1px solid #ecece4',
@@ -115,7 +170,7 @@ const App: React.FC = () => {
 
       <Content style={{ background: '#fff' }}>
         {currentPage === 'home' && <Home auth={auth} onStartChat={goChat} onOpenDocs={() => setCurrentPage('documents')} />}
-        {currentPage === 'chat' && <Chat auth={auth} preset={chatPreset} clearPreset={() => setChatPreset(undefined)} />}
+        {currentPage === 'chat' && <Chat auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[], selectedId?: string | null) => { setSidebarSessions(sessions); if (selectedId !== undefined) setActiveSessionId(selectedId); }} />}
         {currentPage === 'documents' && <Documents auth={auth} isAdmin={isAdmin} />}
         {currentPage === 'admin' && isAdmin && <Admin auth={auth} />}
       </Content>
