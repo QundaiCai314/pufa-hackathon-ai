@@ -761,7 +761,30 @@ def get_classified_content(doc_name: str) -> dict:
     
     # 判断文档类型
     if _is_brochure(analysis):
-        return _classify_brochure(doc_name, analysis)
+        result = _classify_brochure(doc_name, analysis)
+        # 将宣传册格式转换为前端期望的格式
+        all_images = []
+        for section in result.get("sections", []):
+            for img in section.get("all_images", []):
+                all_images.append(img)
+        return {
+            "doc_type": "brochure",
+            "product_groups": [
+                {
+                    "category_name": section.get("title", f"第{section.get('page_num',0)}页"),
+                    "category_page": section.get("page_num", 0),
+                    "en_name": section.get("page_type_label", ""),
+                    "features": section.get("list_items", []),
+                    "images": section.get("all_images", []),
+                }
+                for section in result.get("sections", [])
+            ],
+            "tables": result.get("tables", []),
+            "product_images": all_images,
+            "contact_info": result.get("contact_info"),
+            "sections": result.get("sections", []),
+            "summary": result.get("summary", {}),
+        }
     
     classified = {
         "product_groups": [],   # 按大类分组的产品
