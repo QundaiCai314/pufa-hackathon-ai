@@ -79,6 +79,7 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [latestProposal, setLatestProposal] = useState<{ id: string; version_no: number; title: string } | null>(null);
   const [proposalVersions, setProposalVersions] = useState<{ id: string; version_no: number; title: string; created_at: string }[]>([]);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versionDiff, setVersionDiff] = useState<any>(null);
   const [exportingProposal, setExportingProposal] = useState(false);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
@@ -147,6 +148,11 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
         role: m.role,
         content: m.content,
         answer: m.role === 'assistant' ? m.content : undefined,
+        results: m.metadata?.results || [],
+        followups: m.metadata?.followups || [],
+        web_sources: m.metadata?.web_sources || [],
+        no_result: !!m.metadata?.no_result,
+        web_available: !!m.metadata?.web_available,
         timestamp: new Date(m.created_at || Date.now()),
       }));
       setMessages(hist);
@@ -223,6 +229,25 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     if (!res.ok) { message.error('方案版本加载失败'); return; }
     const data = await res.json(); setProposalVersions(data.proposals || []); setVersionsOpen(true);
+  };
+
+  const restoreProposal = async (proposal: { id: string; version_no: number }) => {
+    if (!sessionId) return;
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${proposal.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) { message.error('方案版本恢复失败'); return; }
+    const data = await res.json(); const payload = data.proposal.payload;
+    setProfile(payload.profile || {});
+    setMessages(prev => [...prev, { id: `restore-${Date.now()}`, role: 'assistant', content: payload.content || '', answer: payload.content || '', results: payload.results || [], timestamp: new Date() }]);
+    setLatestProposal(data.proposal); setVersionsOpen(false); message.success(`已恢复 V${proposal.version_no} 为当前方案草稿`);
+  };
+
+  const compareProposal = async (proposal: { id: string; version_no: number }) => {
+    if (!sessionId || proposalVersions.length < 2) { message.info('至少保存两个方案版本后才能比较'); return; }
+    const base = proposalVersions.find(p => p.version_no === proposal.version_no - 1) || proposalVersions.find(p => p.id !== proposal.id);
+    if (!base) return;
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${proposal.id}/compare/${base.id}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) { message.error('版本差异加载失败'); return; }
+    setVersionDiff(await res.json());
   };
 
   const downloadProposal = async (format: 'docx' | 'pdf' | 'xlsx', proposal = latestProposal) => {
@@ -377,6 +402,11 @@ ${query}`
       };
 
       setMessages((prev) => [...prev, botMsg]);
+      // 保存原始提问和完整检索证据；历史会话可恢复产品卡片、来源与联网引用。
+      await Promise.all([
+        fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ role: 'user', content: query }) }),
+        fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ role: 'assistant', content: botMsg.content, metadata: { results: botMsg.results, followups: botMsg.followups, web_sources: botMsg.web_sources, no_result: botMsg.no_result, web_available: botMsg.web_available } }) }),
+      ]);
       // 首轮问答后，后端自动生成标题，刷新会话列表
       if (messages.filter((m) => m.role === 'user').length <= 1) {
         loadSessions();
@@ -820,6 +850,8 @@ ${query}`
         {proposalVersions.length === 0 ? <div style={{ color: '#9c9b96' }}>当前会话还没有已保存的方案版本。</div> : (
           <List dataSource={proposalVersions} renderItem={(proposal) => (
             <List.Item actions={[
+              <Button key="restore" size="small" onClick={() => restoreProposal(proposal)}>恢复</Button>,
+              <Button key="diff" size="small" onClick={() => compareProposal(proposal)}>差异</Button>,
               <Button key="word" size="small" onClick={() => downloadProposal('docx', proposal)}>Word</Button>,
               <Button key="pdf" size="small" onClick={() => downloadProposal('pdf', proposal)}>PDF</Button>,
               <Button key="excel" size="small" onClick={() => downloadProposal('xlsx', proposal)}>Excel</Button>,
@@ -828,6 +860,11 @@ ${query}`
             </List.Item>
           )} />
         )}
+        {versionDiff && <div style={{ marginTop: 16, padding: 12, background: '#fff8e8', borderRadius: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>V{versionDiff.base_version} → V{versionDiff.target_version} 差异</div>
+          {versionDiff.profile_changes.length === 0 ? '需求画像无变化' : versionDiff.profile_changes.map((item: any) => <div key={item.field}>{item.field}：{item.from || '未填写'} → {item.to || '未填写'}</div>)}
+          <div style={{ marginTop: 5 }}>方案正文：{versionDiff.content_changed ? '已修改' : '未修改'}；参数冲突：{versionDiff.conflict_count} 项</div>
+        </div>}
       </Modal>
 
       {/* 产品参数详情 */}

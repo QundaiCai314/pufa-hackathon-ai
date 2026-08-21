@@ -50,6 +50,19 @@ def normalize_result_rows(results: list):
     return rows
 
 
+def detect_conflicts(rows: list):
+    grouped = {}
+    for item in rows:
+        key = (item.get("model") or "未标注型号", item.get("standard") or "未标注字段")
+        grouped.setdefault(key, []).append(item)
+    conflicts = []
+    for (model, field), items in grouped.items():
+        values = {str(x.get("value", "")).strip() for x in items if str(x.get("value", "")).strip()}
+        if len(values) > 1:
+            conflicts.append({"model": model, "field": field, "values": sorted(values), "sources": [{"doc":x.get("doc"), "page":x.get("page"), "value":x.get("value")} for x in items]})
+    return conflicts
+
+
 def proposal_payload(session_id: str, user: dict, version_id: str | None = None):
     with db().connect() as conn:
         params = {"s": session_id, "u": user["id"]}
@@ -118,13 +131,30 @@ def ensure_chat_tables():
 
 @router.post("/sessions/{session_id}/proposals")
 def save_proposal(session_id: str, req: ProposalSaveRequest, user=Depends(current_user)):
-    payload = {"profile": req.profile, "content": req.content, "results": req.results, "normalized_rows": normalize_result_rows(req.results)}
+    normalized_rows = normalize_result_rows(req.results)
+    conflicts = detect_conflicts(normalized_rows)
+    for item in normalized_rows:
+        if any(c["model"] == item["model"] and c["field"] == item["standard"] for c in conflicts):
+            item["status"] = "存在参数冲突，待人工确认"
+    payload = {"profile": req.profile, "content": req.content, "results": req.results, "normalized_rows": normalized_rows, "conflicts": conflicts}
     with db().begin() as conn:
         ok = conn.execute(text("SELECT 1 FROM chat_sessions WHERE id=:s AND user_id=:u"), {"s": session_id, "u": user["id"]}).first()
         if not ok: raise HTTPException(404, "会话不存在")
         no = conn.execute(text("SELECT COALESCE(MAX(version_no),0)+1 FROM proposal_versions WHERE session_id=:s"), {"s": session_id}).scalar()
         row = conn.execute(text("INSERT INTO proposal_versions(session_id,user_id,version_no,title,payload) VALUES(:s,:u,:n,:t,CAST(:p AS JSONB)) RETURNING id,version_no,title,created_at"), {"s":session_id,"u":user["id"],"n":no,"t":req.title,"p":json.dumps(payload,ensure_ascii=False)}).mappings().first()
-    return {"proposal": dict(row), "normalized_count": len(payload["normalized_rows"])}
+    return {"proposal": dict(row), "normalized_count": len(payload["normalized_rows"]), "conflicts": conflicts}
+
+@router.get("/sessions/{session_id}/proposals/{version_id}")
+def get_proposal(session_id: str, version_id: str, user=Depends(current_user)):
+    row, payload = proposal_payload(session_id, user, version_id)
+    return {"proposal": {"id": row["id"], "version_no": row["version_no"], "title": row["title"], "created_at": row["created_at"], "payload": payload}}
+
+@router.get("/sessions/{session_id}/proposals/{version_id}/compare/{other_version_id}")
+def compare_proposals(session_id: str, version_id: str, other_version_id: str, user=Depends(current_user)):
+    left, a = proposal_payload(session_id, user, version_id); right, b = proposal_payload(session_id, user, other_version_id)
+    keys = sorted(set((a.get("profile") or {}) | (b.get("profile") or {})))
+    profile_changes = [{"field": k, "from": (b.get("profile") or {}).get(k), "to": (a.get("profile") or {}).get(k)} for k in keys if (a.get("profile") or {}).get(k) != (b.get("profile") or {}).get(k)]
+    return {"base_version": right["version_no"], "target_version": left["version_no"], "profile_changes": profile_changes, "content_changed": (a.get("content") or "") != (b.get("content") or ""), "conflict_count": len(a.get("conflicts") or [])}
 
 @router.get("/sessions/{session_id}/proposals")
 def list_proposals(session_id: str, user=Depends(current_user)):
