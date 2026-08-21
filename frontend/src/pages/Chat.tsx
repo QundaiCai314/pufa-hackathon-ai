@@ -76,6 +76,8 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailModel, setDetailModel] = useState('');
   const [detailResults, setDetailResults] = useState<SearchResult[]>([]);
+  const [latestProposal, setLatestProposal] = useState<{ id: string; version_no: number; title: string } | null>(null);
+  const [exportingProposal, setExportingProposal] = useState(false);
   const [selection, setSelection] = useState({
     scene: '', scale: '', pressure: '', purity: '', deployment: '', energy: '',
   });
@@ -200,6 +202,25 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
     }
     const filename = result.doc.toLowerCase().endsWith('.pdf') ? result.doc : `${result.doc}.pdf`;
     window.open(`${API}/api/v1/documents/file/${encodeURIComponent(filename)}#page=${result.page || 1}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const saveProposal = async () => {
+    if (!sessionId || !messages.length || exportingProposal) { message.warning('请先生成一份方案或完成一次对话'); return; }
+    const assistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (!assistant) { message.warning('请先生成方案内容'); return; }
+    setExportingProposal(true);
+    try {
+      const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ title: `项目技术方案-${new Date().toLocaleDateString()}`, profile, content: assistant.content, results: assistant.results || [] }) });
+      if (!res.ok) throw new Error('保存失败');
+      const data = await res.json(); setLatestProposal(data.proposal); message.success(`方案 V${data.proposal.version_no} 已保存，可导出 Word、PDF 或 Excel`);
+    } catch { message.error('方案保存失败，请稍后重试'); } finally { setExportingProposal(false); }
+  };
+
+  const downloadProposal = async (format: 'docx' | 'pdf' | 'xlsx') => {
+    if (!sessionId || !latestProposal) { message.info('请先保存方案版本'); return; }
+    const res = await fetch(`${API}/api/v1/auth/sessions/${sessionId}/proposals/${latestProposal.id}/${format}`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) { message.error('导出失败'); return; }
+    const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=`proposal_v${latestProposal.version_no}.${format}`; a.click(); URL.revokeObjectURL(url);
   };
 
   const openProductDetail = (model: string, results?: SearchResult[]) => {
@@ -408,6 +429,12 @@ ${query}`
         </Space>
 
         <Space size={8}>
+          <Button size="small" onClick={saveProposal} loading={exportingProposal}>保存方案版本</Button>
+          {latestProposal && <>
+            <Button size="small" onClick={() => downloadProposal('docx')}>Word</Button>
+            <Button size="small" onClick={() => downloadProposal('pdf')}>PDF</Button>
+            <Button size="small" onClick={() => downloadProposal('xlsx')}>Excel</Button>
+          </>}
           <Button
             type="text" icon={<HistoryOutlined />}
             onClick={() => setHistoryOpen(true)}

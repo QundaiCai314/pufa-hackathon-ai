@@ -4,6 +4,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+from docx import Document
+import zipfile
+import html
+import fitz
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -14,6 +20,45 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "qingpu-change-this-secret")
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+class ProposalSaveRequest(BaseModel):
+    title: str = "项目技术方案"
+    profile: dict = {}
+    content: str = ""
+    results: list = []
+
+STANDARD_FIELDS = {
+    "额定产氢量": "额定产氢量", "产氢量": "额定产氢量", "输出功率": "输出功率",
+    "峰值功率": "峰值输出功率", "工作压力": "工作压力", "氢气产品压力": "氢气产品压力",
+    "运行温度": "工作温度", "工作温度": "工作温度", "设计寿命": "设计寿命",
+    "功率密度": "功率密度", "质量": "质量", "尺寸": "外形尺寸",
+    "电压范围": "电压范围", "电流范围": "电流范围", "氢气纯度": "氢气纯度",
+    "电解槽功耗": "电解槽功耗", "负载范围": "负载范围", "热启动时间": "热启动时间", "冷启动时间": "冷启动时间",
+}
+
+
+def normalize_result_rows(results: list):
+    rows = []
+    for result in results or []:
+        headers = result.get("table_headers") or []
+        table_rows = result.get("table_rows") or []
+        for row in table_rows:
+            if not row: continue
+            field = str(row[0])
+            for idx, value in enumerate(row[1:], 1):
+                rows.append({"standard": STANDARD_FIELDS.get(field, field), "raw": field, "model": headers[idx] if idx < len(headers) else "", "value": str(value), "doc": result.get("doc", ""), "page": result.get("page", ""), "status": "已引用原始表格"})
+    return rows
+
+
+def proposal_payload(session_id: str, user: dict, version_id: str | None = None):
+    with db().connect() as conn:
+        params = {"s": session_id, "u": user["id"]}
+        clause = "AND id=:v" if version_id else ""
+        if version_id: params["v"] = version_id
+        row = conn.execute(text(f"SELECT * FROM proposal_versions WHERE session_id=:s AND user_id=:u {clause} ORDER BY version_no DESC LIMIT 1"), params).mappings().first()
+    if not row: raise HTTPException(404, "方案版本不存在")
+    payload = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"])
+    return dict(row), payload
 
 class RegisterRequest(BaseModel):
     username: str
@@ -68,6 +113,77 @@ def ensure_chat_tables():
         conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS lead_level VARCHAR(16) DEFAULT 'low'"))
         conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS lead_signals JSONB DEFAULT '{}'::jsonb"))
         conn.execute(text("""CREATE TABLE IF NOT EXISTS chat_messages (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE, role VARCHAR(20) NOT NULL, content TEXT NOT NULL, metadata JSONB, created_at TIMESTAMP DEFAULT NOW())"""))
+        conn.execute(text("""CREATE TABLE IF NOT EXISTS proposal_versions (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE, user_id UUID REFERENCES users(id) ON DELETE CASCADE, version_no INTEGER NOT NULL DEFAULT 1, title VARCHAR(255) NOT NULL, payload JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMP DEFAULT NOW())"""))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_proposal_versions_session ON proposal_versions(session_id, created_at DESC)"))
+
+@router.post("/sessions/{session_id}/proposals")
+def save_proposal(session_id: str, req: ProposalSaveRequest, user=Depends(current_user)):
+    payload = {"profile": req.profile, "content": req.content, "results": req.results, "normalized_rows": normalize_result_rows(req.results)}
+    with db().begin() as conn:
+        ok = conn.execute(text("SELECT 1 FROM chat_sessions WHERE id=:s AND user_id=:u"), {"s": session_id, "u": user["id"]}).first()
+        if not ok: raise HTTPException(404, "会话不存在")
+        no = conn.execute(text("SELECT COALESCE(MAX(version_no),0)+1 FROM proposal_versions WHERE session_id=:s"), {"s": session_id}).scalar()
+        row = conn.execute(text("INSERT INTO proposal_versions(session_id,user_id,version_no,title,payload) VALUES(:s,:u,:n,:t,CAST(:p AS JSONB)) RETURNING id,version_no,title,created_at"), {"s":session_id,"u":user["id"],"n":no,"t":req.title,"p":json.dumps(payload,ensure_ascii=False)}).mappings().first()
+    return {"proposal": dict(row), "normalized_count": len(payload["normalized_rows"])}
+
+@router.get("/sessions/{session_id}/proposals")
+def list_proposals(session_id: str, user=Depends(current_user)):
+    with db().connect() as conn:
+        rows = conn.execute(text("SELECT id,version_no,title,created_at FROM proposal_versions WHERE session_id=:s AND user_id=:u ORDER BY version_no DESC"), {"s":session_id,"u":user["id"]}).mappings().all()
+    return {"proposals": [dict(x) for x in rows]}
+
+@router.get("/sessions/{session_id}/proposals/{version_id}/docx")
+def proposal_docx(session_id: str, version_id: str, user=Depends(current_user)):
+    row, p = proposal_payload(session_id, user, version_id)
+    doc = Document(); doc.add_heading(p.get("profile", {}).get("项目名称", row["title"]), 0)
+    doc.add_paragraph(f"方案版本：V{row['version_no']}    生成时间：{row['created_at']}")
+    doc.add_heading("项目需求画像", 1)
+    for k,v in (p.get("profile") or {}).items(): doc.add_paragraph(f"{k}：{v}")
+    doc.add_heading("技术方案初稿", 1); doc.add_paragraph(p.get("content") or "暂无方案正文")
+    doc.add_heading("参数与来源", 1)
+    table = doc.add_table(rows=1, cols=6); table.style = "Table Grid"
+    for cell, val in zip(table.rows[0].cells, ["标准字段","原始字段","型号","原始值","来源","核验状态"]): cell.text=val
+    for x in p.get("normalized_rows", []):
+        cells=table.add_row().cells
+        for c,val in zip(cells,[x.get("standard"),x.get("raw"),x.get("model"),x.get("value"),f"{x.get('doc')} P{x.get('page')}",x.get("status")]): c.text=str(val or "")
+    out=BytesIO(); doc.save(out); out.seek(0)
+    return StreamingResponse(out, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": f"attachment; filename=proposal_v{row['version_no']}.docx"})
+
+@router.get("/sessions/{session_id}/proposals/{version_id}/xlsx")
+def proposal_xlsx(session_id: str, version_id: str, user=Depends(current_user)):
+    row, p = proposal_payload(session_id, user, version_id)
+    headers = ["标准字段","原始字段","型号","原始值","来源文档","页码","核验状态"]
+    rows = [headers] + [[x.get("standard"),x.get("raw"),x.get("model"),x.get("value"),x.get("doc"),x.get("page"),x.get("status")] for x in p.get("normalized_rows", [])]
+    def cell(value): return f'<c t="inlineStr"><is><t>{html.escape(str(value or ""))}</t></is></c>'
+    sheet_rows = ''.join(f'<row r="{i}">' + ''.join(cell(v) for v in values) + '</row>' for i, values in enumerate(rows, 1))
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{sheet_rows}</sheetData></worksheet>'
+    content = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'
+    rels = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'
+    workbook = '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="参数对比" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    wbrels = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+    out=BytesIO()
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml',content); z.writestr('_rels/.rels',rels); z.writestr('xl/workbook.xml',workbook); z.writestr('xl/_rels/workbook.xml.rels',wbrels); z.writestr('xl/worksheets/sheet1.xml',xml)
+    out.seek(0)
+    return StreamingResponse(out, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=proposal_v{row['version_no']}.xlsx"})
+
+@router.get("/sessions/{session_id}/proposals/{version_id}/pdf")
+def proposal_pdf(session_id: str, version_id: str, user=Depends(current_user)):
+    row, p = proposal_payload(session_id, user, version_id); pdf = fitz.open(); page = pdf.new_page(width=595, height=842)
+    y=50; page.insert_text((50,y), row["title"], fontsize=16, fontname="china-s"); y+=28
+    page.insert_text((50,y), f"方案版本：V{row['version_no']}", fontsize=10, fontname="china-s"); y+=24
+    sections=[("项目需求画像", "；".join(f"{k}：{v}" for k,v in (p.get("profile") or {}).items())), ("技术方案初稿",p.get("content") or "暂无方案正文")]
+    for heading, body in sections:
+        if y>770: page=pdf.new_page(width=595,height=842); y=50
+        page.insert_text((50,y),heading,fontsize=13,fontname="china-s"); y+=22
+        for raw_line in str(body).splitlines() or [""]:
+            for line in [raw_line[i:i+42] for i in range(0,len(raw_line),42)] or [""]:
+                if y>790: page=pdf.new_page(width=595,height=842); y=50
+                page.insert_text((55,y),line,fontsize=9,fontname="china-s"); y+=14
+        y+=10
+    out=BytesIO(); pdf.save(out); pdf.close(); out.seek(0)
+    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=proposal_v{row['version_no']}.pdf"})
+
 
 @router.post("/register")
 def register(req: RegisterRequest):
