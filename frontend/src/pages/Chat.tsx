@@ -408,21 +408,44 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
                     </div>
                   )}
 
-                  {/* 推荐追问 Chips */}
+                  {/* 推荐追问 - 突出样式 */}
                   {m.followups && m.followups.length > 0 && (
-                    <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {m.followups.map((f, i) => (
-                        <Button
-                          key={i} size="small"
-                          style={{
-                            borderRadius: 14, background: '#fff', borderColor: '#ecece4',
-                            color: '#5f5e5a', fontSize: 12,
-                          }}
-                          onClick={() => handleSend(f)}
-                        >
-                          {f}
-                        </Button>
-                      ))}
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ fontSize: 12, color: '#9c9b96', marginBottom: 10 }}>
+                        继续提问
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {m.followups.map((f, i) => (
+                          <div
+                            key={i}
+                            onClick={() => handleSend(f)}
+                            style={{
+                              background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: 10,
+                              padding: '12px 16px',
+                              fontSize: 13,
+                              color: '#166534',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'linear-gradient(135deg, #dcfce7 0%, #d1fae5 100%)';
+                              e.currentTarget.style.borderColor = '#86efac';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)';
+                              e.currentTarget.style.borderColor = '#bbf7d0';
+                            }}
+                          >
+                            <span style={{ color: '#10b981', fontSize: 14 }}>→</span>
+                            {f}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
