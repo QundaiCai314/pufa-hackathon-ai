@@ -87,6 +87,7 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
   });
   const [profile, setProfile] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sessionLoadRef = useRef(0);
 
   const profileRequiredFields = ['应用场景', '目标规模', '压力要求', '部署方式', '能源来源'];
   const profileLabels: Record<string, string> = {
@@ -108,12 +109,8 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
       const data = await res.json();
       const nextSessions = data.sessions || [];
       setSessions(nextSessions);
-      onSessionsChange?.(nextSessions, initialSessionId || (sessionId || nextSessions[0]?.id || null));
-      if (!sessionId && initialSessionId) {
-        loadSession(initialSessionId);
-      } else if (!sessionId && nextSessions.length > 0) {
-        loadSession(nextSessions[0].id);
-      }
+      // The global sidebar owns selection. A background list refresh must never choose a session.
+      onSessionsChange?.(nextSessions, initialSessionId || sessionId);
     } catch {
       // 忽略后台加载错误
     }
@@ -144,10 +141,14 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
 
   const loadSession = async (id: string) => {
     if (!token) return;
+    const requestId = ++sessionLoadRef.current;
+    setSessionId(id);
+    setMessages([]);
     try {
       const res = await fetch(`${API}/api/v1/auth/sessions/${id}`, { headers: authHeaders });
-      if (!res.ok) return;
+      if (!res.ok || requestId !== sessionLoadRef.current) return;
       const s = await res.json();
+      if (requestId !== sessionLoadRef.current) return;
       setSessionId(s.id);
       onSessionsChange?.(sessions, s.id);
       setRole(s.assistant_role || 'customer_service');
@@ -202,7 +203,13 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
   }, [preset]);
 
   useEffect(() => {
-    if (initialSessionId && initialSessionId !== sessionId) loadSession(initialSessionId);
+    if (initialSessionId && initialSessionId !== sessionId) {
+      loadSession(initialSessionId);
+    } else if (!initialSessionId && sessionId) {
+      sessionLoadRef.current += 1;
+      setSessionId(null);
+      setMessages([]);
+    }
   }, [initialSessionId]);
 
   useEffect(() => {
