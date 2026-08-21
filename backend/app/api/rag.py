@@ -136,6 +136,10 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
             sources = await search_web(effective_query + (" 氢能 竞品" if web_mode == "competitor" else " 氢能 行业动态"))
             if sources:
                 answer = await llm_service.generate_web_answer(effective_query, sources, web_mode, request.role)
+                if request.session_id:
+                    title = await llm_service.generate_title(request.query, answer)
+                    with db().begin() as conn:
+                        conn.execute(text("UPDATE chat_sessions SET session_name=:n WHERE id=:s AND user_id=:u"), {"n": title, "s": request.session_id, "u": user["id"]})
                 return {"query": request.query, "answer": answer, "results": [], "count": 0, "followups": [], "web_sources": sources, "mode": web_mode, "lead": lead, "no_result": False, "web_available": True}
         answer = f"暂未在当前企业资料中找到“{request.query}”的可靠信息。你可以换一种说法，或补充产品型号、应用场景和关键参数。"
         return {"query": request.query, "answer": answer, "results": [], "count": 0, "followups": [], "web_sources": [], "mode": "knowledge", "lead": lead, "no_result": True, "web_available": bool(should_web)}
@@ -148,7 +152,22 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
         role=request.role,
     )
     followups = await llm_service.generate_followups(request.query, results)
-    
+
+    # 4. 首轮问答后自动生成会话标题
+    if request.session_id:
+        with db().connect() as conn:
+            msg_count = conn.execute(
+                text("SELECT COUNT(*) FROM chat_messages WHERE session_id=:s"),
+                {"s": request.session_id},
+            ).scalar() or 0
+        if msg_count <= 1:
+            title = await llm_service.generate_title(request.query, answer)
+            with db().begin() as conn:
+                conn.execute(
+                    text("UPDATE chat_sessions SET session_name=:n WHERE id=:s AND user_id=:u"),
+                    {"n": title, "s": request.session_id, "u": user["id"]},
+                )
+
     return {
         "query": request.query,
         "answer": answer,

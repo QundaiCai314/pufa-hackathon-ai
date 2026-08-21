@@ -326,6 +326,34 @@ class LLMService:
             logger.warning(f"Followup generation failed: {exc}")
             return []
 
+    async def generate_title(self, query: str, answer: str) -> str:
+        """根据首轮问答生成 ≤10 字的会话标题。"""
+        prompt = f"""根据以下问答，生成一个不超过 10 字的精炼标题，概括对话主题。
+只返回标题文字，不加引号、编号或任何解释。
+
+用户问题：{query}
+回答摘要：{answer[:200]}
+
+标题："""
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "你是标题生成助手，只输出精炼的中文标题。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=30,
+                timeout=30.0,
+            )
+            title = (response.choices[0].message.content or "").strip().strip('""\'')
+            # 兜底：截断并清理
+            title = title.splitlines()[0].strip()[:15]
+            return title if title else "新对话"
+        except Exception as exc:
+            logger.warning(f"Title generation failed: {exc}")
+            return "新对话"
+
     async def generate_answer_stream(
         self,
         query: str,

@@ -220,6 +220,10 @@ export default function Chat({ auth, preset, clearPreset }: { auth: any; preset?
       };
 
       setMessages((prev) => [...prev, botMsg]);
+      // 首轮问答后，后端自动生成标题，刷新会话列表
+      if (messages.filter((m) => m.role === 'user').length <= 1) {
+        loadSessions();
+      }
     } catch (e: any) {
       setMessages((prev) => [
         ...prev,
