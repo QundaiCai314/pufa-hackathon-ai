@@ -127,7 +127,7 @@ async def chat(request: ChatRequest, user=Depends(current_user)):
     # 2. 无可靠企业资料时，走“无结果卡 + 可选联网”降级链路。
     # 低于该阈值的向量结果只作为弱相关，不直接交给模型当作事实依据。
     max_score = max((float(r.get("score", 0) or 0) for r in results), default=0)
-    no_reliable_result = not results or max_score < 0.45
+    no_reliable_result = not results or max_score < 0.15
     if no_reliable_result:
         should_web, web_mode = await llm_service.decide_web_search(effective_query)
         if request.force_web:
