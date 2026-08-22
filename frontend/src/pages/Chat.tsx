@@ -109,8 +109,7 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
       const data = await res.json();
       const nextSessions = data.sessions || [];
       setSessions(nextSessions);
-      // The global sidebar owns selection. A background list refresh must never choose a session.
-      onSessionsChange?.(nextSessions, initialSessionId || sessionId);
+      onSessionsChange?.(nextSessions);
     } catch {
       // 忽略后台加载错误
     }

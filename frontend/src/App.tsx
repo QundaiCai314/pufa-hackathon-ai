@@ -71,6 +71,7 @@ const App: React.FC = () => {
     setCurrentPage('chat');
   };
 
+  const goChatSession = (sessionId: string) => setActiveSessionId(sessionId);
   const createSidebarSession = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/sessions`, { method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ session_name: '新对话', assistant_role: 'customer_service' }) });
@@ -140,7 +141,7 @@ const App: React.FC = () => {
             <div className="sidebar-section-label"><span>最近对话</span><span>{sidebarSessions.length || ''}</span></div>
             <div className="sidebar-history-list">
               {sidebarSessions.length === 0 ? <div className="sidebar-history-empty">暂无历史记录</div> : sidebarSessions.slice(0, 12).map((s) => (
-                <div key={s.id} className={`sidebar-history-item ${s.id === activeSessionId ? 'is-active' : ''}`} onClick={() => goChat(undefined, s.id)} title={s.session_name || '新对话'}>
+                <div key={s.id} className={`sidebar-history-item ${s.id === activeSessionId ? 'is-active' : ''}`} onClick={() => goChatSession(s.id)} title={s.session_name || '新对话'}>
                   <span className="sidebar-history-name">{s.session_name || '新对话'}</span>
                   <Button type="text" size="small" className="sidebar-history-delete" icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); deleteSidebarSession(s.id); }} />
                 </div>
@@ -172,7 +173,7 @@ const App: React.FC = () => {
 
       <Content style={{ background: '#fff' }}>
         {currentPage === 'home' && <Home auth={auth} onStartChat={goChat} onOpenDocs={() => setCurrentPage('documents')} />}
-        {currentPage === 'chat' && <Chat key={activeSessionId || 'new-chat'} auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[]) => { if (sessions.length > 0) setSidebarSessions(sessions); }} />}
+        {currentPage === 'chat' && <Chat auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[]) => { if (sessions.length > 0) setSidebarSessions(sessions); }} />}
         {currentPage === 'documents' && <Documents auth={auth} isAdmin={isAdmin} />}
         {currentPage === 'graph' && <RelationshipGraph auth={auth} sessions={sidebarSessions} initialSessionId={activeSessionId} />}
         {currentPage === 'admin' && isAdmin && <Admin auth={auth} />}
