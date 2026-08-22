@@ -129,7 +129,7 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
       const nextSessions = [s, ...sessions];
       setSessions(nextSessions);
       setSessionId(s.id);
-      onSessionsChange?.(nextSessions, s.id);
+      onSessionsChange?.(nextSessions);
       setRole(s.assistant_role || 'customer_service');
       setMessages([]);
       return s.id;
@@ -397,7 +397,10 @@ ${query}`
     let activeSessionId = sessionId;
     if (!activeSessionId) {
       activeSessionId = await createSession();
-      if (!activeSessionId) return;
+      if (!activeSessionId) {
+        message.error('创建会话失败，请重试');
+        return;
+      }
     }
 
     const userMsg: Message = {
@@ -443,13 +446,33 @@ ${query}`
       };
 
       setMessages((prev) => [...prev, botMsg]);
-      // 保存原始提问和完整检索证据；历史会话可恢复产品卡片、来源与联网引用。
-      await Promise.all([
-        fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ role: 'user', content: query }) }),
-        fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ role: 'assistant', content: botMsg.content, metadata: { results: botMsg.results, followups: botMsg.followups, web_sources: botMsg.web_sources, no_result: botMsg.no_result, web_available: botMsg.web_available } }) }),
-      ]);
-      // 首轮问答后，后端自动生成标题，刷新会话列表
-      if (messages.filter((m) => m.role === 'user').length <= 1) {
+
+      // 保存消息到后端，确保历史记录可恢复
+      const saveUser = await fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ role: 'user', content: query, metadata: {} }),
+      });
+      const saveBot = await fetch(`${API}/api/v1/auth/sessions/${activeSessionId}/messages`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          role: 'assistant',
+          content: botMsg.content,
+          metadata: {
+            results: botMsg.results,
+            followups: botMsg.followups,
+            web_sources: botMsg.web_sources,
+            no_result: botMsg.no_result,
+            web_available: botMsg.web_available,
+          },
+        }),
+      });
+
+      if (!saveUser.ok || !saveBot.ok) {
+        message.warning('消息保存失败，历史记录可能不完整');
+      } else {
+        // 保存成功后刷新会话列表
         loadSessions();
       }
     } catch (e: any) {
