@@ -20,3 +20,11 @@
 .graph-legend { display: flex; align-items: center; gap: 7px; color: #85857e; font-size: 11px; margin-top: 13px; }
 .graph-legend i { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px; }.graph-legend i:first-child { margin-left: 0; }.legend-project { background: #1c3328; }.legend-profile { background: #b68a35; }.legend-product { background: #4b8168; }
 @media (max-width: 620px) { .relationship-modal { max-width: calc(100vw - 20px); }.relationship-graph { height: 455px; }.graph-node { width: 132px; min-height: 64px; padding: 8px; }.graph-node-profile, .graph-node-sources { left: 3%; }.graph-node-products, .graph-node-risk { right: 3%; }.graph-node-project { left: calc(50% - 66px); }.graph-node b { font-size: 12px; }.graph-node span { font-size: 10px; }.graph-inspector { gap: 10px; flex-direction: column; } }
+.graph-page { padding: 44px 52px 60px; max-width: 1080px; margin: 0 auto; }
+.graph-page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 28px; flex-wrap: wrap; }
+.graph-kicker { color: #4b8168; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.graph-page h1 { font-size: 26px; font-weight: 650; margin: 6px 0 4px; letter-spacing: -0.3px; }
+.graph-page p { color: #77766f; font-size: 13px; margin: 0; }
+.graph-page-loading { display: flex; justify-content: center; padding: 140px 0; }
+.relationship-graph-page { height: 460px; }
+.relationship-graph-page .graph-node-project { background: #1c3328; border-color: #1c3328; }

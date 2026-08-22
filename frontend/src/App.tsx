@@ -4,13 +4,14 @@ import {
 } from 'antd';
 import {
   HomeOutlined, FileTextOutlined, MessageOutlined, SettingOutlined,
-  PlusOutlined, LogoutOutlined, DeleteOutlined,
+  PlusOutlined, LogoutOutlined, DeleteOutlined, ApartmentOutlined,
 } from '@ant-design/icons';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Chat from './pages/Chat';
 import Documents from './pages/Documents';
 import Admin from './pages/Admin';
+import RelationshipGraph from './pages/RelationshipGraph';
 import './App.css';
 
 const { Sider, Content } = Layout;
@@ -21,7 +22,7 @@ const getAuth = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY) |
 const setAuth = (v: any) => localStorage.setItem(AUTH_KEY, JSON.stringify(v));
 const clearAuth = () => localStorage.removeItem(AUTH_KEY);
 
-type Page = 'home' | 'chat' | 'documents' | 'admin';
+type Page = 'home' | 'chat' | 'documents' | 'graph' | 'admin';
 
 interface SidebarSession {
   id: string;
@@ -130,6 +131,7 @@ const App: React.FC = () => {
               { key: 'home', icon: <HomeOutlined />, label: '首页' },
               { key: 'chat', icon: <MessageOutlined />, label: '智能问答' },
               { key: 'documents', icon: <FileTextOutlined />, label: '知识库' },
+              { key: 'graph', icon: <ApartmentOutlined />, label: '关系图谱' },
               ...(isAdmin ? [{ key: 'admin', icon: <SettingOutlined />, label: '管理后台' }] : []),
             ]}
           />
@@ -172,6 +174,7 @@ const App: React.FC = () => {
         {currentPage === 'home' && <Home auth={auth} onStartChat={goChat} onOpenDocs={() => setCurrentPage('documents')} />}
         {currentPage === 'chat' && <Chat key={activeSessionId || 'new-chat'} auth={auth} preset={chatPreset} initialSessionId={activeSessionId} clearPreset={() => setChatPreset(undefined)} onSessionsChange={(sessions: SidebarSession[]) => { if (sessions.length > 0) setSidebarSessions(sessions); }} />}
         {currentPage === 'documents' && <Documents auth={auth} isAdmin={isAdmin} />}
+        {currentPage === 'graph' && <RelationshipGraph auth={auth} sessions={sidebarSessions} initialSessionId={activeSessionId} />}
         {currentPage === 'admin' && isAdmin && <Admin auth={auth} />}
       </Content>
     </Layout>
