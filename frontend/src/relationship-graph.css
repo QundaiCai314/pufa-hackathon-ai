@@ -1,0 +1,22 @@
+.relationship-modal .ant-modal-content { border-radius: 14px; overflow: hidden; }
+.relationship-modal .ant-modal-header { padding: 20px 24px 0; margin-bottom: 0; }
+.relationship-modal .ant-modal-body { padding: 10px 24px 22px; }
+.graph-subtitle { color: #77766f; font-size: 13px; margin: 0 0 18px; }
+.relationship-graph { position: relative; height: 430px; background: #fafaf6; border: 1px solid #e9e9e1; border-radius: 10px; overflow: hidden; }
+.relationship-graph:before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(#d8d8cf 0.7px, transparent 0.7px); background-size: 18px 18px; opacity: .48; }
+.graph-links { position: absolute; inset: 0; width: 100%; height: 100%; }
+.graph-links line { stroke: #aabeb2; stroke-width: 1.35; stroke-dasharray: 4 4; }
+.graph-node { position: absolute; z-index: 1; display: flex; flex-direction: column; justify-content: center; min-height: 70px; width: 168px; padding: 10px 13px; text-align: left; background: #fff; border: 1px solid #d9d9d0; border-radius: 9px; color: #222; cursor: pointer; transition: border .15s, box-shadow .15s, transform .15s; }
+.graph-node:hover, .graph-node.selected { border-color: #478267; box-shadow: 0 4px 12px rgba(36, 82, 60, .11); transform: translateY(-1px); }
+.graph-node b { font-size: 13px; font-weight: 650; }
+.graph-node span { color: #77766f; font-size: 11px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.graph-node-project { left: calc(50% - 84px); top: calc(50% - 35px); background: #1c3328; border-color: #1c3328; color: #fff; }
+.graph-node-project span { color: #c7d7cd; }.graph-node-project.selected { border-color: #1c3328; }
+.graph-node-profile { left: 7%; top: 10%; }.graph-node-products { right: 7%; top: 10%; }
+.graph-node-sources { left: 7%; bottom: 10%; }.graph-node-risk { right: 7%; bottom: 10%; }
+.graph-inspector { margin-top: 14px; padding: 12px 14px; min-height: 60px; display: flex; gap: 16px; align-items: flex-start; background: #f3f5ef; border-left: 3px solid #4b8168; }
+.graph-inspector span { flex: 0 0 auto; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64806f; padding-top: 2px; }
+.graph-inspector strong { font-size: 13px; line-height: 1.55; font-weight: 500; color: #353a35; }
+.graph-legend { display: flex; align-items: center; gap: 7px; color: #85857e; font-size: 11px; margin-top: 13px; }
+.graph-legend i { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px; }.graph-legend i:first-child { margin-left: 0; }.legend-project { background: #1c3328; }.legend-profile { background: #b68a35; }.legend-product { background: #4b8168; }
+@media (max-width: 620px) { .relationship-modal { max-width: calc(100vw - 20px); }.relationship-graph { height: 455px; }.graph-node { width: 132px; min-height: 64px; padding: 8px; }.graph-node-profile, .graph-node-sources { left: 3%; }.graph-node-products, .graph-node-risk { right: 3%; }.graph-node-project { left: calc(50% - 66px); }.graph-node b { font-size: 12px; }.graph-node span { font-size: 10px; }.graph-inspector { gap: 10px; flex-direction: column; } }

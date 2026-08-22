@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import '../relationship-graph.css';
 
 const { TextArea } = Input;
 
@@ -70,6 +71,8 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [graphFocus, setGraphFocus] = useState('project');
   const [role, setRole] = useState('customer_service');
   const [selectionOpen, setSelectionOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -96,7 +99,6 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
     '纯度要求': '纯度要求', '部署方式': '部署方式', '能源来源': '能源来源',
   };
   const profileMissing = profileRequiredFields.filter(field => !profile[field]);
-
   const authHeaders = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -315,6 +317,18 @@ export default function Chat({ auth, preset, initialSessionId, clearPreset, onSe
     return Array.from(models).slice(0, 6);
   };
 
+  const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+  const graphModels = getProductModels(latestAssistant?.results).slice(0, 3);
+  const graphSources = Array.from(new Set((latestAssistant?.results || []).map(r => r.doc).filter(Boolean))).slice(0, 3);
+  const graphFacts = Object.entries(profile).slice(0, 4);
+  const graphDetail: Record<string, string> = {
+    project: `当前会话已关联 ${messages.length} 条对话消息。`,
+    profile: graphFacts.length ? graphFacts.map(([k, v]) => `${k}：${v}`).join('；') : '尚未填写项目需求画像，可点击“智能选型”补充。',
+    products: graphModels.length ? `识别到 ${graphModels.join('、')} 等可关联产品。` : '当前回答尚未识别到具体产品型号。',
+    sources: graphSources.length ? `引用资料：${graphSources.join('、')}。` : '继续提问后，系统会将命中的企业资料接入图谱。',
+    risk: profileMissing.length ? `建议补充：${profileMissing.join('、')}。` : '需求信息已较完整，可继续生成方案或进行风险检查。',
+  };
+
   const handleGeneratePlan = () => {
     if (!Object.keys(profile).length) {
       message.warning('请先通过智能选型填写项目需求');
@@ -513,6 +527,7 @@ ${query}`
         <Space size={8}>
           <Button size="small" onClick={saveProposal} loading={exportingProposal}>保存方案版本</Button>
           <Button size="small" onClick={loadProposalVersions}>方案版本</Button>
+          <Button size="small" onClick={() => { setGraphFocus('project'); setGraphOpen(true); }}>关系图谱</Button>
           {latestProposal && <>
             <Button size="small" onClick={() => downloadProposal('docx')}>Word</Button>
             <Button size="small" onClick={() => downloadProposal('pdf')}>PDF</Button>
@@ -1066,6 +1081,23 @@ ${query}`
             onChange={e => setSelection({ ...selection, energy: e.target.value })}
           />
         </div>
+      </Modal>
+
+      <Modal open={graphOpen} onCancel={() => setGraphOpen(false)} footer={null} width={860} title="项目关系图谱" className="relationship-modal">
+        <div className="graph-subtitle">将当前会话中的需求、产品、资料与待确认项集中呈现。点击节点查看关联说明。</div>
+        <div className="relationship-graph">
+          <svg className="graph-links" viewBox="0 0 760 430" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="380" y1="210" x2="178" y2="105" /><line x1="380" y1="210" x2="582" y2="105" />
+            <line x1="380" y1="210" x2="178" y2="324" /><line x1="380" y1="210" x2="582" y2="324" />
+          </svg>
+          <button className={`graph-node graph-node-project ${graphFocus === 'project' ? 'selected' : ''}`} onClick={() => setGraphFocus('project')}><b>当前项目</b><span>{sessionId ? '会话已建立' : '新建会话'}</span></button>
+          <button className={`graph-node graph-node-profile ${graphFocus === 'profile' ? 'selected' : ''}`} onClick={() => setGraphFocus('profile')}><b>需求画像</b><span>{graphFacts.length ? `${graphFacts.length} 项已关联` : '待补充'}</span></button>
+          <button className={`graph-node graph-node-products ${graphFocus === 'products' ? 'selected' : ''}`} onClick={() => setGraphFocus('products')}><b>推荐产品</b><span>{graphModels.length ? graphModels.join(' · ') : '等待识别'}</span></button>
+          <button className={`graph-node graph-node-sources ${graphFocus === 'sources' ? 'selected' : ''}`} onClick={() => setGraphFocus('sources')}><b>资料证据</b><span>{graphSources.length ? `${graphSources.length} 份来源` : '等待检索'}</span></button>
+          <button className={`graph-node graph-node-risk ${graphFocus === 'risk' ? 'selected' : ''}`} onClick={() => setGraphFocus('risk')}><b>待确认条件</b><span>{profileMissing.length ? `${profileMissing.length} 项缺失` : '信息完整'}</span></button>
+        </div>
+        <div className="graph-inspector"><span>关联说明</span><strong>{graphDetail[graphFocus]}</strong></div>
+        <div className="graph-legend"><i className="legend-project" />项目中心 <i className="legend-profile" />需求与条件 <i className="legend-product" />产品与资料</div>
       </Modal>
 
       {/* 历史对话抽屉 */}
